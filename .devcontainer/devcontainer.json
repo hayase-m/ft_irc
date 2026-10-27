@@ -1,0 +1,26 @@
+{
+	"name": "ft_irc",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".."
+	},
+	"remoteUser": "vscode",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode.cpptools-extension-pack",
+				"ms-vscode.makefile-tools"
+			],
+			"settings": {
+				"files.trimTrailingWhitespace": true,
+				"files.insertFinalNewline": true,
+				"files.trimFinalNewlines": true,
+				"editor.insertSpaces": false,
+				"terminal.integrated.defaultProfile.linux": "zsh",
+				"[cpp]": {
+					"editor.defaultFormatter": "ms-vscode.cpptools"
+				}
+			}
+		}
+	}
+}

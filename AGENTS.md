@@ -57,6 +57,7 @@
 - 初期 `main` を作成する最初のcommitとpushを除き、`main` へ直接pushしない。
 - 初期commitとpushを含め、ユーザーから明示的な依頼がない限り、commit、push、merge、リリース作成を行わない。
 - Issue、PR、ラベル、MilestoneなどのGitHub上の状態も、依頼された範囲だけ変更する。
+- PR作成時は `.github/pull_request_template.md` の各項目を空欄のまま残し、`Closes #` に対象Issue番号だけを記入する。概要、変更内容、動作確認、レビューしてほしい点はエージェントが記入せず、ユーザーが後から記入できる状態にする。
 - 最新の `main` から作業ブランチを作成する。
 - ブランチ名は小文字ASCIIのケバブケースを使い、`<種類>/<Issue番号>-<短い説明>` の形式にする。
 - ブランチの種類は `feat`、`fix`、`refactor`、`test`、`docs`、`chore` のいずれかにする。

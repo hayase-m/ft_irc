@@ -7,7 +7,7 @@ CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic -MMD -MP
 INCLUDES = -Iinclude
 
-SRCS = main.cpp
+SRCS = main.cpp IrcMessage.cpp
 
 SRCDIR = src
 OBJDIR = objs

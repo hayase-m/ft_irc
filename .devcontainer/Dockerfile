@@ -10,6 +10,7 @@ RUN apt-get update \
 		man-db \
 		manpages \
 		manpages-dev \
+		netcat-openbsd \
 		tzdata \
 		valgrind \
 	&& update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100 \

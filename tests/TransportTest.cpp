@@ -29,7 +29,6 @@ namespace
 		return false;
 	}
 
-	// テスト用クライアント。サーバー側のFDにはアクセスしない。
 	class Peer
 	{
 	public:
@@ -219,7 +218,6 @@ namespace
 			}
 		}
 
-		// peerのFDを先に確保し、解放するサーバーFDをacceptで再利用させる。
 		Peer replacement;
 		transport.Disconnect(first_id);
 		transport.Disconnect(first_id);
@@ -280,7 +278,6 @@ namespace
 		Peer first;
 		const ClientId first_id = first.Connect(transport);
 		first.Close();
-		// 新規接続と既存接続のEOFが続けて到着する。
 		Peer incoming;
 		incoming.StartConnection();
 		ClientId incoming_id = 0;

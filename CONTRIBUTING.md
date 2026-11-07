@@ -42,6 +42,7 @@
 - enum値は `kPascalCase` とする。
 - 非型テンプレート引数は、変数または定数の命名規則に従う。
 - マクロは原則として使用しない。必要な場合は、プロジェクト固有のprefixを付けた `UPPER_SNAKE_CASE` とする。
+- ただし、インクルードガードはファイル名を大文字にし、`.` を `_` に置き換えた名前とする（例: `Transport.hpp` → `TRANSPORT_HPP`）。これは本プロジェクト独自の規則であり、[Google C++ Style Guideが推奨する形式](https://google.github.io/styleguide/cppguide.html#The__define_Guard)（`<PROJECT>_<PATH>_<FILE>_H_`）とは異なる。
 - プロジェクト外の人に伝わりにくい略語は避ける。略語を使用する場合は1つの単語として扱う。例えば、`StartRpc()` とし、`StartRPC()` とはしない。
 - 広く認識されている略語は使用してよい。ループカウンタの `i` および型テンプレート引数の `T` は使用できる。
 - 既存のCまたはC++の要素に対応する識別子では、その既存要素の命名形式に従ってよい。

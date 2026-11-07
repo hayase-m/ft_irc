@@ -7,47 +7,39 @@
 
 typedef unsigned int ClientId;
 
-struct TransportEvent
-{
-	enum Type
-	{
-		kConnected,
-		kReadable,
-		kWritable,
-		kDisconnected
-	};
+struct TransportEvent {
+  enum Type { kConnected, kReadable, kWritable, kDisconnected };
 
-	Type type;
-	ClientId client_id;
+  Type type;
+  ClientId client_id;
 };
 
-class Transport
-{
+class Transport {
 public:
-	explicit Transport(unsigned short port);
-	~Transport();
+  explicit Transport(unsigned short port);
+  ~Transport();
 
-	std::vector<TransportEvent> WaitForEvents();
-	bool Receive(ClientId client_id, std::string &data);
-	void Disconnect(ClientId client_id);
+  std::vector<TransportEvent> WaitForEvents();
+  bool Receive(ClientId client_id, std::string &data);
+  void Disconnect(ClientId client_id);
 
 private:
-	struct Client
-	{
-		int fd;
-		bool wants_to_send;
-		bool read_ready;
-	};
+  struct Client {
+    int fd;
+    bool wants_to_send;
+    bool read_ready;
+    std::string read_buffer;
+  };
 
-	int listen_fd_;
-	std::map<ClientId, Client> clients_;
-	ClientId next_client_id_;
-	std::vector<TransportEvent> disconnected_events_;
+  int listen_fd_;
+  std::map<ClientId, Client> clients_;
+  ClientId next_client_id_;
+  std::vector<TransportEvent> disconnected_events_;
 
-	void AcceptClient(std::vector<TransportEvent> &events);
+  void AcceptClient(std::vector<TransportEvent> &events);
 
-	Transport(const Transport &other);
-	Transport &operator=(const Transport &other);
+  Transport(const Transport &other);
+  Transport &operator=(const Transport &other);
 };
 
 #endif

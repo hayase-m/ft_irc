@@ -174,13 +174,6 @@ bool Transport::Receive(ClientId client_id, std::string &data)
 	return true;
 }
 
-void Transport::SetWriteInterest(ClientId client_id, bool enabled)
-{
-	std::map<ClientId, Client>::iterator it = clients_.find(client_id);
-	if (it != clients_.end())
-		it->second.wants_to_send = enabled;
-}
-
 void Transport::Disconnect(ClientId client_id)
 {
 	std::map<ClientId, Client>::iterator it = clients_.find(client_id);

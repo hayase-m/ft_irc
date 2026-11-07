@@ -175,26 +175,7 @@ namespace
 		}
 		Check(rejected, "同じ読み取り可能通知でReceiveを繰り返せた");
 
-		transport.SetWriteInterest(second_id, true);
-		std::vector<TransportEvent> events = transport.WaitForEvents();
-		Check(events.size() == 1
-			&& HasEvent(events, TransportEvent::kWritable, second_id),
-			"指定した接続だけが書き込み可能にならなかった");
-		second.Send("both");
-		bool received = false;
-		while (!received)
-		{
-			events = transport.WaitForEvents();
-			Check(HasEvent(events, TransportEvent::kWritable, second_id),
-				"書き込み監視が通知前に解除された");
-			if (HasEvent(events, TransportEvent::kReadable, second_id))
-			{
-				Check(transport.Receive(second_id, data) && data == "both",
-					"読み書き可能が同時に通知されたときに受信できない");
-				received = true;
-			}
-		}
-		transport.SetWriteInterest(second_id, false);
+		std::vector<TransportEvent> events;
 		first.Send("a");
 		third.Send("c");
 		bool first_read = false;
@@ -202,8 +183,6 @@ namespace
 		while (!first_read || !third_read)
 		{
 			events = transport.WaitForEvents();
-			Check(!HasEvent(events, TransportEvent::kWritable, second_id),
-				"書き込み監視を解除できない");
 			for (std::size_t i = 0; i < events.size(); ++i)
 			{
 				Check(events[i].type == TransportEvent::kReadable,
@@ -227,7 +206,6 @@ namespace
 			"切断通知が重複した");
 		const ClientId replacement_id = replacement.Connect(transport);
 		Check(replacement_id > third_id, "切断したClientIdが再利用された");
-		transport.SetWriteInterest(first_id, true);
 		transport.Disconnect(first_id);
 		Check(!transport.Receive(first_id, data), "古いClientIdで受信できた");
 		replacement.Send("new");
@@ -237,7 +215,7 @@ namespace
 			"古いClientIdの操作が新しい接続へ影響した");
 		Check(transport.Receive(replacement_id, data) && data == "new",
 			"再接続先から受信できない");
-		std::cout << "PASS: 接続・受信・監視切替・FD再利用" << std::endl;
+		std::cout << "PASS: 接続・受信・FD再利用" << std::endl;
 	}
 
 	void TestDisconnects()

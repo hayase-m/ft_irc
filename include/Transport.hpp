@@ -29,7 +29,6 @@ public:
 
 	std::vector<TransportEvent> WaitForEvents();
 	bool Receive(ClientId client_id, std::string &data);
-	void SetWriteInterest(ClientId client_id, bool enabled);
 	void Disconnect(ClientId client_id);
 
 private:

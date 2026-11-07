@@ -30,9 +30,9 @@ Transport::Transport(unsigned short port)
 	{
 		if (fcntl(listen_fd_, F_SETFL, O_NONBLOCK) == -1)
 			ThrowSocketError("fcntl");
-		const int reuse_address = 1;
+		const int yes = 1;
 		if (setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR,
-			&reuse_address, sizeof(reuse_address)) == -1)
+			&yes, sizeof(yes)) == -1)
 			ThrowSocketError("setsockopt");
 		sockaddr_in address = {};
 		address.sin_family = AF_INET;

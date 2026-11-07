@@ -122,7 +122,7 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
     return;
   }
   try {
-    Client client = {client_fd, false, false};
+    Client client = {client_fd, false, false, ""};
     clients_.insert(std::make_pair(next_client_id_, client));
   } catch (...) {
     close(client_fd);
@@ -131,7 +131,7 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
   AddEvent(events, TransportEvent::kConnected, next_client_id_++);
 }
 
-bool Transport::Receive(ClientId client_id, std::string &data) {
+bool Transport::Receive(ClientId client_id, std::vector<std::string> &data) {
   data.clear();
   std::map<ClientId, Client>::iterator it = clients_.find(client_id);
   if (it == clients_.end())
@@ -145,7 +145,15 @@ bool Transport::Receive(ClientId client_id, std::string &data) {
     Disconnect(client_id);
     return false;
   }
-  data.assign(buffer, static_cast<std::size_t>(received));
+  std::string &read_buffer = it->second.read_buffer;
+  read_buffer.append(buffer, static_cast<std::string::size_type>(received));
+  while (true) {
+    const std::string::size_type pos = read_buffer.find("\r\n");
+    if (pos == std::string::npos)
+      break;
+    data.push_back(read_buffer.substr(0, pos));
+    read_buffer.erase(0, pos + 2);
+  }
   return true;
 }
 

@@ -20,7 +20,7 @@ public:
   ~Transport();
 
   std::vector<TransportEvent> WaitForEvents();
-  bool Receive(ClientId client_id, std::string &data);
+  bool Receive(ClientId client_id, std::vector<std::string> &data);
   void Disconnect(ClientId client_id);
 
 private:

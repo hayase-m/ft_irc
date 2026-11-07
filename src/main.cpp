@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
       const std::vector<TransportEvent> events = transport.WaitForEvents();
       for (std::size_t i = 0; i < events.size(); ++i) {
         if (events[i].type == TransportEvent::kReadable) {
-          std::string data;
+          std::vector<std::string> data;
           transport.Receive(events[i].client_id, data);
         }
       }

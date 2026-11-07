@@ -13,6 +13,8 @@
 
 namespace
 {
+	const ClientId kExhaustedClientId = 0;
+
 	void ThrowSocketError(const std::string &operation)
 	{
 		throw std::runtime_error(operation + ": "
@@ -84,7 +86,7 @@ std::vector<TransportEvent> Transport::WaitForEvents()
 			return events;
 		ThrowSocketError("accept");
 	}
-	if (next_client_id_ == 0)
+	if (next_client_id_ == kExhaustedClientId)
 	{
 		close(client_fd);
 		return events;

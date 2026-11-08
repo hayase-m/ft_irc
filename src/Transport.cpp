@@ -126,11 +126,13 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
   }
   Connection *client = NULL;
   try {
-    if (clients_.size() >= disconnected_events_.max_size()) {
+    if (clients_.size() >= disconnected_events_.max_size() ||
+        events.size() >= events.max_size()) {
       close(client_fd);
       return;
     }
     disconnected_events_.reserve(clients_.size() + 1);
+    events.reserve(events.size() + 1);
     client = new Connection(client_fd);
     clients_.insert(std::make_pair(next_client_id_, client));
   } catch (const std::bad_alloc &) {
@@ -139,14 +141,9 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
     else
       close(client_fd);
     return;
-  } catch (...) {
-    if (client != NULL)
-      delete client;
-    else
-      close(client_fd);
-    throw;
   }
-  AddEvent(events, TransportEvent::kConnected, next_client_id_++);
+  AddEvent(events, TransportEvent::kConnected, next_client_id_);
+  ++next_client_id_;
 }
 
 bool Transport::Receive(ClientId client_id, std::vector<std::string> &data) {

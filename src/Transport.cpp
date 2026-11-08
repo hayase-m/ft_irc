@@ -2,6 +2,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <new>
 #include <stdexcept>
 #include <string>
 
@@ -63,7 +64,8 @@ Transport::~Transport() {
 std::vector<TransportEvent> Transport::WaitForEvents() {
   std::vector<TransportEvent> events;
   if (!disconnected_events_.empty()) {
-    events.swap(disconnected_events_);
+    events = disconnected_events_;
+    disconnected_events_.clear();
     return events;
   }
   std::vector<pollfd> poll_fds;
@@ -122,8 +124,16 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
     return;
   }
   try {
+    if (clients_.size() >= disconnected_events_.max_size()) {
+      close(client_fd);
+      return;
+    }
+    disconnected_events_.reserve(clients_.size() + 1);
     Client client = {client_fd, false, false, ""};
     clients_.insert(std::make_pair(next_client_id_, client));
+  } catch (const std::bad_alloc &) {
+    close(client_fd);
+    return;
   } catch (...) {
     close(client_fd);
     throw;
@@ -145,14 +155,20 @@ bool Transport::Receive(ClientId client_id, std::vector<std::string> &data) {
     Disconnect(client_id);
     return false;
   }
-  std::string &read_buffer = it->second.read_buffer;
-  read_buffer.append(buffer, static_cast<std::string::size_type>(received));
-  while (true) {
-    const std::string::size_type pos = read_buffer.find("\r\n");
-    if (pos == std::string::npos)
-      break;
-    data.push_back(read_buffer.substr(0, pos));
-    read_buffer.erase(0, pos + 2);
+  try {
+    std::string &read_buffer = it->second.read_buffer;
+    read_buffer.append(buffer, static_cast<std::string::size_type>(received));
+    while (true) {
+      const std::string::size_type pos = read_buffer.find("\r\n");
+      if (pos == std::string::npos)
+        break;
+      data.push_back(read_buffer.substr(0, pos));
+      read_buffer.erase(0, pos + 2);
+    }
+  } catch (const std::bad_alloc &) {
+    data.clear();
+    Disconnect(client_id);
+    return false;
   }
   return true;
 }

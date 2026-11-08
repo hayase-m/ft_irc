@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+class Connection;
+
 typedef unsigned int ClientId;
 
 struct TransportEvent {
@@ -24,15 +26,8 @@ public:
   void Disconnect(ClientId client_id);
 
 private:
-  struct Client {
-    int fd;
-    bool wants_to_send;
-    bool read_ready;
-    std::string read_buffer;
-  };
-
   int listen_fd_;
-  std::map<ClientId, Client> clients_;
+  std::map<ClientId, Connection *> clients_;
   ClientId next_client_id_;
   std::vector<TransportEvent> disconnected_events_;
 

@@ -2,6 +2,7 @@
 #define FT_IRC_TRANSPORT_HPP
 
 #include <map>
+#include <poll.h>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,7 @@ private:
   std::map<ClientId, Connection *> clients_;
   ClientId next_client_id_;
   std::vector<ClientId> disconnected_client_ids_;
+  std::vector<pollfd> poll_fds_;
 
   void AcceptClient(std::vector<TransportEvent> &events);
 

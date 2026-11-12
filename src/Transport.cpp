@@ -9,7 +9,6 @@
 
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -78,6 +77,7 @@ Transport::Transport(unsigned short port) : listen_fd_(-1), next_client_id_(1) {
       ThrowSocketError("bind");
     if (listen(listen_fd_, SOMAXCONN) == -1)
       ThrowSocketError("listen");
+    poll_fds_.reserve(1);
   } catch (...) {
     close(listen_fd_);
     throw;
@@ -97,20 +97,20 @@ std::vector<TransportEvent> Transport::WaitForEvents() {
     AppendDisconnectedEvents(disconnected_client_ids_, events);
     return events;
   }
-  std::vector<pollfd> poll_fds;
+  poll_fds_.clear();
   pollfd listener = {listen_fd_, POLLIN, 0};
-  poll_fds.push_back(listener);
+  poll_fds_.push_back(listener);
   for (std::map<ClientId, Connection *>::iterator it = clients_.begin();
        it != clients_.end(); ++it) {
     pollfd client_poll_fd = {it->second->GetSocketFd(), POLLIN, 0};
-    poll_fds.push_back(client_poll_fd);
+    poll_fds_.push_back(client_poll_fd);
   }
-  if (poll(&poll_fds[0], poll_fds.size(), -1) == -1) {
+  if (poll(&poll_fds_[0], poll_fds_.size(), -1) == -1) {
     if (errno == EINTR)
       return events;
     ThrowSocketError("poll");
   }
-  if (poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))
+  if (poll_fds_[0].revents & (POLLERR | POLLHUP | POLLNVAL))
     throw std::runtime_error("listening socket is unavailable");
   std::size_t index = 1;
   std::map<ClientId, Connection *>::iterator it = clients_.begin();
@@ -118,7 +118,7 @@ std::vector<TransportEvent> Transport::WaitForEvents() {
     std::map<ClientId, Connection *>::iterator current = it++;
     const ClientId client_id = current->first;
     Connection &connection = *current->second;
-    const short ready = poll_fds[index++].revents;
+    const short ready = poll_fds_[index++].revents;
     if ((ready & (POLLERR | POLLNVAL)) ||
         ((ready & POLLHUP) && !(ready & POLLIN))) {
       Disconnect(client_id);
@@ -127,7 +127,7 @@ std::vector<TransportEvent> Transport::WaitForEvents() {
     if ((ready & POLLIN) && !ReceiveClientLines(connection, client_id, events))
       Disconnect(client_id);
   }
-  if (poll_fds[0].revents & POLLIN)
+  if (poll_fds_[0].revents & POLLIN)
     AcceptClient(events);
   AppendDisconnectedEvents(disconnected_client_ids_, events);
   return events;
@@ -150,6 +150,7 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
     disconnected_client_ids_.reserve(disconnected_client_ids_.size() +
                                      clients_.size() + 1);
     events.reserve(events.size() + 1);
+    poll_fds_.reserve(poll_fds_.size() + 1);
     client = new Connection(client_fd);
     clients_.insert(std::make_pair(next_client_id_, client));
   } catch (const std::bad_alloc &) {

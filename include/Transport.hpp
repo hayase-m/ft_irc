@@ -33,6 +33,8 @@ private:
   std::vector<ClientId> disconnected_client_ids_;
   std::vector<pollfd> poll_fds_;
 
+  void BuildPollFds();
+  void HandleConnectionEvents(std::vector<TransportEvent> &events);
   void AcceptClient(std::vector<TransportEvent> &events);
 
   Transport(const Transport &other);

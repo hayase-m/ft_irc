@@ -5,6 +5,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+namespace {
+const std::string::size_type kCrlfLength = 2;
+} // namespace
+
 Connection::Connection(int fd) : fd_(fd) {}
 
 Connection::~Connection() { close(fd_); }
@@ -19,11 +23,11 @@ bool Connection::ReceiveLines(std::vector<std::string> &lines) {
   try {
     read_buffer_.append(buffer, static_cast<std::string::size_type>(received));
     while (true) {
-      const std::string::size_type pos = read_buffer_.find("\r\n");
-      if (pos == std::string::npos)
+      const std::string::size_type line_end = read_buffer_.find("\r\n");
+      if (line_end == std::string::npos)
         break;
-      lines.push_back(read_buffer_.substr(0, pos));
-      read_buffer_.erase(0, pos + 2);
+      lines.push_back(read_buffer_.substr(0, line_end));
+      read_buffer_.erase(0, line_end + kCrlfLength);
     }
   } catch (const std::bad_alloc &) {
     return false;

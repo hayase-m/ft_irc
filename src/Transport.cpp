@@ -27,6 +27,35 @@ void AddEvent(std::vector<TransportEvent> &events, TransportEvent::Type type,
   event.client_id = client_id;
   events.push_back(event);
 }
+
+void AppendDisconnectedEvents(std::vector<ClientId> &client_ids,
+                              std::vector<TransportEvent> &events) {
+  try {
+    events.reserve(events.size() + client_ids.size());
+  } catch (const std::bad_alloc &) {
+    return;
+  }
+  for (std::size_t i = 0; i < client_ids.size(); ++i)
+    AddEvent(events, TransportEvent::kDisconnected, client_ids[i]);
+  client_ids.clear();
+}
+
+bool ReceiveClientLines(Connection &client, ClientId client_id,
+                        std::vector<TransportEvent> &events) {
+  std::vector<std::string> lines;
+  if (!client.ReceiveLines(lines))
+    return false;
+  try {
+    events.reserve(events.size() + lines.size());
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
+  for (std::size_t i = 0; i < lines.size(); ++i) {
+    AddEvent(events, TransportEvent::kLineReceived, client_id);
+    events.back().line.swap(lines[i]);
+  }
+  return true;
+}
 } // namespace
 
 Transport::Transport(unsigned short port) : listen_fd_(-1), next_client_id_(1) {
@@ -64,9 +93,8 @@ Transport::~Transport() {
 
 std::vector<TransportEvent> Transport::WaitForEvents() {
   std::vector<TransportEvent> events;
-  if (!disconnected_events_.empty()) {
-    events = disconnected_events_;
-    disconnected_events_.clear();
+  if (!disconnected_client_ids_.empty()) {
+    AppendDisconnectedEvents(disconnected_client_ids_, events);
     return events;
   }
   std::vector<pollfd> poll_fds;
@@ -74,11 +102,8 @@ std::vector<TransportEvent> Transport::WaitForEvents() {
   poll_fds.push_back(listener);
   for (std::map<ClientId, Connection *>::iterator it = clients_.begin();
        it != clients_.end(); ++it) {
-    it->second->SetReadReady(false);
-    pollfd client = {it->second->GetSocketFd(), POLLIN, 0};
-    if (it->second->GetWantsToSend())
-      client.events |= POLLOUT;
-    poll_fds.push_back(client);
+    pollfd client_poll_fd = {it->second->GetSocketFd(), POLLIN, 0};
+    poll_fds.push_back(client_poll_fd);
   }
   if (poll(&poll_fds[0], poll_fds.size(), -1) == -1) {
     if (errno == EINTR)
@@ -91,24 +116,20 @@ std::vector<TransportEvent> Transport::WaitForEvents() {
   std::map<ClientId, Connection *>::iterator it = clients_.begin();
   while (it != clients_.end()) {
     std::map<ClientId, Connection *>::iterator current = it++;
+    const ClientId client_id = current->first;
+    Connection &connection = *current->second;
     const short ready = poll_fds[index++].revents;
     if ((ready & (POLLERR | POLLNVAL)) ||
         ((ready & POLLHUP) && !(ready & POLLIN))) {
-      Disconnect(current->first);
+      Disconnect(client_id);
       continue;
     }
-    if (ready & POLLIN) {
-      current->second->SetReadReady(true);
-      AddEvent(events, TransportEvent::kReadable, current->first);
-    }
-    if ((ready & POLLOUT) && !(ready & POLLHUP))
-      AddEvent(events, TransportEvent::kWritable, current->first);
+    if ((ready & POLLIN) && !ReceiveClientLines(connection, client_id, events))
+      Disconnect(client_id);
   }
-  events.insert(events.end(), disconnected_events_.begin(),
-                disconnected_events_.end());
-  disconnected_events_.clear();
   if (poll_fds[0].revents & POLLIN)
     AcceptClient(events);
+  AppendDisconnectedEvents(disconnected_client_ids_, events);
   return events;
 }
 
@@ -126,12 +147,8 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
   }
   Connection *client = NULL;
   try {
-    if (clients_.size() >= disconnected_events_.max_size() ||
-        events.size() >= events.max_size()) {
-      close(client_fd);
-      return;
-    }
-    disconnected_events_.reserve(clients_.size() + 1);
+    disconnected_client_ids_.reserve(disconnected_client_ids_.size() +
+                                     clients_.size() + 1);
     events.reserve(events.size() + 1);
     client = new Connection(client_fd);
     clients_.insert(std::make_pair(next_client_id_, client));
@@ -146,23 +163,11 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
   ++next_client_id_;
 }
 
-bool Transport::Receive(ClientId client_id, std::vector<std::string> &data) {
-  data.clear();
-  std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
-  if (it == clients_.end())
-    return false;
-  if (!it->second->Receive(data)) {
-    Disconnect(client_id);
-    return false;
-  }
-  return true;
-}
-
 void Transport::Disconnect(ClientId client_id) {
   std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
   if (it == clients_.end())
     return;
-  AddEvent(disconnected_events_, TransportEvent::kDisconnected, client_id);
+  disconnected_client_ids_.push_back(client_id);
   delete it->second;
   clients_.erase(it);
 }

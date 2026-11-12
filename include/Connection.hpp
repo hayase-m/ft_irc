@@ -10,18 +10,11 @@ public:
   ~Connection();
 
   int GetSocketFd() const;
-  bool GetWantsToSend() const;
-  void SetReadReady(bool read_ready);
-
-  bool Receive(std::vector<std::string> &data);
+  bool ReceiveLines(std::vector<std::string> &lines);
 
 private:
   int fd_;
-  bool wants_to_send_;
-  bool read_ready_;
   std::string read_buffer_;
-
-  void ExtractLines(std::vector<std::string> &data);
 
   Connection(const Connection &other);
   Connection &operator=(const Connection &other);

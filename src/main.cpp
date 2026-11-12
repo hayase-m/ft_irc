@@ -24,8 +24,12 @@ int main(int argc, char **argv) {
   }
   try {
     Transport transport(ParsePort(argv[1]));
-    while (true)
+    while (true) {
       transport.WaitForEvents();
+      ClientId client_id;
+      while (transport.PopDisconnectedClientId(client_id)) {
+      }
+    }
   } catch (const std::exception &e) {
     std::cerr << "ircserv: " << e.what() << std::endl;
     return 1;

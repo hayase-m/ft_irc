@@ -11,7 +11,7 @@ class Connection;
 typedef unsigned int ClientId;
 
 struct TransportEvent {
-  enum Type { kConnected, kLineReceived, kDisconnected };
+  enum Type { kConnected, kLineReceived };
 
   Type type;
   ClientId client_id;
@@ -24,6 +24,7 @@ public:
   ~Transport();
 
   std::vector<TransportEvent> WaitForEvents();
+  bool PopDisconnectedClientId(ClientId &client_id);
   void Disconnect(ClientId client_id);
 
 private:

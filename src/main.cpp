@@ -26,9 +26,12 @@ int main(int argc, char **argv) {
     Transport transport(ParsePort(argv[1]));
     while (true) {
       const std::vector<TransportEvent> events = transport.WaitForEvents();
-      // テスト用print
-      for (std::size_t i = 0; i < events.size(); ++i)
-        std::cout << "connected client_id=" << events[i].client_id << std::endl;
+      for (std::size_t i = 0; i < events.size(); ++i) {
+        if (events[i].type == TransportEvent::kReadable) {
+          std::vector<std::string> data;
+          transport.Receive(events[i].client_id, data);
+        }
+      }
     }
   } catch (const std::exception &e) {
     std::cerr << "ircserv: " << e.what() << std::endl;

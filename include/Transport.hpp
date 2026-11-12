@@ -2,16 +2,20 @@
 #define TRANSPORT_HPP
 
 #include <map>
+#include <poll.h>
 #include <string>
 #include <vector>
+
+class Connection;
 
 typedef unsigned int ClientId;
 
 struct TransportEvent {
-  enum Type { kConnected, kReadable, kWritable, kDisconnected };
+  enum Type { kConnected, kLineReceived, kDisconnected };
 
   Type type;
   ClientId client_id;
+  std::string line;
 };
 
 class Transport {
@@ -20,21 +24,14 @@ public:
   ~Transport();
 
   std::vector<TransportEvent> WaitForEvents();
-  bool Receive(ClientId client_id, std::vector<std::string> &data);
   void Disconnect(ClientId client_id);
 
 private:
-  struct Client {
-    int fd;
-    bool wants_to_send;
-    bool read_ready;
-    std::string read_buffer;
-  };
-
   int listen_fd_;
-  std::map<ClientId, Client> clients_;
+  std::map<ClientId, Connection *> clients_;
   ClientId next_client_id_;
-  std::vector<TransportEvent> disconnected_events_;
+  std::vector<ClientId> disconnected_client_ids_;
+  std::vector<pollfd> poll_fds_;
 
   void AcceptClient(std::vector<TransportEvent> &events);
 

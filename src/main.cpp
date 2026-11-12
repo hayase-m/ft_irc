@@ -24,15 +24,8 @@ int main(int argc, char **argv) {
   }
   try {
     Transport transport(ParsePort(argv[1]));
-    while (true) {
-      const std::vector<TransportEvent> events = transport.WaitForEvents();
-      for (std::size_t i = 0; i < events.size(); ++i) {
-        if (events[i].type == TransportEvent::kReadable) {
-          std::vector<std::string> data;
-          transport.Receive(events[i].client_id, data);
-        }
-      }
-    }
+    while (true)
+      transport.WaitForEvents();
   } catch (const std::exception &e) {
     std::cerr << "ircserv: " << e.what() << std::endl;
     return 1;

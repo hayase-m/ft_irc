@@ -1,4 +1,5 @@
 #include "Transport.hpp"
+#include "Connection.hpp"
 
 #include <cerrno>
 #include <cstring>
@@ -8,7 +9,6 @@
 
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -25,6 +25,35 @@ void AddEvent(std::vector<TransportEvent> &events, TransportEvent::Type type,
   event.type = type;
   event.client_id = client_id;
   events.push_back(event);
+}
+
+void AppendDisconnectedEvents(std::vector<ClientId> &client_ids,
+                              std::vector<TransportEvent> &events) {
+  try {
+    events.reserve(events.size() + client_ids.size());
+  } catch (const std::bad_alloc &) {
+    return;
+  }
+  for (std::size_t i = 0; i < client_ids.size(); ++i)
+    AddEvent(events, TransportEvent::kDisconnected, client_ids[i]);
+  client_ids.clear();
+}
+
+bool ReceiveClientLines(Connection &client, ClientId client_id,
+                        std::vector<TransportEvent> &events) {
+  std::vector<std::string> lines;
+  if (!client.ReceiveLines(lines))
+    return false;
+  try {
+    events.reserve(events.size() + lines.size());
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
+  for (std::size_t i = 0; i < lines.size(); ++i) {
+    AddEvent(events, TransportEvent::kLineReceived, client_id);
+    events.back().line.swap(lines[i]);
+  }
+  return true;
 }
 } // namespace
 
@@ -48,6 +77,7 @@ Transport::Transport(unsigned short port) : listen_fd_(-1), next_client_id_(1) {
       ThrowSocketError("bind");
     if (listen(listen_fd_, SOMAXCONN) == -1)
       ThrowSocketError("listen");
+    poll_fds_.reserve(1);
   } catch (...) {
     close(listen_fd_);
     throw;
@@ -55,59 +85,51 @@ Transport::Transport(unsigned short port) : listen_fd_(-1), next_client_id_(1) {
 }
 
 Transport::~Transport() {
-  for (std::map<ClientId, Client>::const_iterator it = clients_.begin();
+  for (std::map<ClientId, Connection *>::const_iterator it = clients_.begin();
        it != clients_.end(); ++it)
-    close(it->second.fd);
+    delete it->second;
   close(listen_fd_);
 }
 
 std::vector<TransportEvent> Transport::WaitForEvents() {
   std::vector<TransportEvent> events;
-  if (!disconnected_events_.empty()) {
-    events = disconnected_events_;
-    disconnected_events_.clear();
+  if (!disconnected_client_ids_.empty()) {
+    AppendDisconnectedEvents(disconnected_client_ids_, events);
     return events;
   }
-  std::vector<pollfd> poll_fds;
+  poll_fds_.clear();
   pollfd listener = {listen_fd_, POLLIN, 0};
-  poll_fds.push_back(listener);
-  for (std::map<ClientId, Client>::iterator it = clients_.begin();
+  poll_fds_.push_back(listener);
+  for (std::map<ClientId, Connection *>::iterator it = clients_.begin();
        it != clients_.end(); ++it) {
-    it->second.read_ready = false;
-    pollfd client = {it->second.fd, POLLIN, 0};
-    if (it->second.wants_to_send)
-      client.events |= POLLOUT;
-    poll_fds.push_back(client);
+    pollfd client_poll_fd = {it->second->GetSocketFd(), POLLIN, 0};
+    poll_fds_.push_back(client_poll_fd);
   }
-  if (poll(&poll_fds[0], poll_fds.size(), -1) == -1) {
+  if (poll(&poll_fds_[0], poll_fds_.size(), -1) == -1) {
     if (errno == EINTR)
       return events;
     ThrowSocketError("poll");
   }
-  if (poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))
+  if (poll_fds_[0].revents & (POLLERR | POLLHUP | POLLNVAL))
     throw std::runtime_error("listening socket is unavailable");
   std::size_t index = 1;
-  std::map<ClientId, Client>::iterator it = clients_.begin();
+  std::map<ClientId, Connection *>::iterator it = clients_.begin();
   while (it != clients_.end()) {
-    std::map<ClientId, Client>::iterator current = it++;
-    const short ready = poll_fds[index++].revents;
+    std::map<ClientId, Connection *>::iterator current = it++;
+    const ClientId client_id = current->first;
+    Connection &connection = *current->second;
+    const short ready = poll_fds_[index++].revents;
     if ((ready & (POLLERR | POLLNVAL)) ||
         ((ready & POLLHUP) && !(ready & POLLIN))) {
-      Disconnect(current->first);
+      Disconnect(client_id);
       continue;
     }
-    if (ready & POLLIN) {
-      current->second.read_ready = true;
-      AddEvent(events, TransportEvent::kReadable, current->first);
-    }
-    if ((ready & POLLOUT) && !(ready & POLLHUP))
-      AddEvent(events, TransportEvent::kWritable, current->first);
+    if ((ready & POLLIN) && !ReceiveClientLines(connection, client_id, events))
+      Disconnect(client_id);
   }
-  events.insert(events.end(), disconnected_events_.begin(),
-                disconnected_events_.end());
-  disconnected_events_.clear();
-  if (poll_fds[0].revents & POLLIN)
+  if (poll_fds_[0].revents & POLLIN)
     AcceptClient(events);
+  AppendDisconnectedEvents(disconnected_client_ids_, events);
   return events;
 }
 
@@ -123,61 +145,30 @@ void Transport::AcceptClient(std::vector<TransportEvent> &events) {
     close(client_fd);
     return;
   }
+  Connection *client = NULL;
   try {
-    if (clients_.size() >= disconnected_events_.max_size()) {
-      close(client_fd);
-      return;
-    }
-    disconnected_events_.reserve(clients_.size() + 1);
-    Client client = {client_fd, false, false, ""};
+    disconnected_client_ids_.reserve(disconnected_client_ids_.size() +
+                                     clients_.size() + 1);
+    events.reserve(events.size() + 1);
+    poll_fds_.reserve(poll_fds_.size() + 1);
+    client = new Connection(client_fd);
     clients_.insert(std::make_pair(next_client_id_, client));
   } catch (const std::bad_alloc &) {
-    close(client_fd);
+    if (client != NULL)
+      delete client;
+    else
+      close(client_fd);
     return;
-  } catch (...) {
-    close(client_fd);
-    throw;
   }
-  AddEvent(events, TransportEvent::kConnected, next_client_id_++);
-}
-
-bool Transport::Receive(ClientId client_id, std::vector<std::string> &data) {
-  data.clear();
-  std::map<ClientId, Client>::iterator it = clients_.find(client_id);
-  if (it == clients_.end())
-    return false;
-  if (!it->second.read_ready)
-    throw std::logic_error("Receive requires a readable event");
-  it->second.read_ready = false;
-  char buffer[4096];
-  const ssize_t received = recv(it->second.fd, buffer, sizeof(buffer), 0);
-  if (received <= 0) {
-    Disconnect(client_id);
-    return false;
-  }
-  try {
-    std::string &read_buffer = it->second.read_buffer;
-    read_buffer.append(buffer, static_cast<std::string::size_type>(received));
-    while (true) {
-      const std::string::size_type pos = read_buffer.find("\r\n");
-      if (pos == std::string::npos)
-        break;
-      data.push_back(read_buffer.substr(0, pos));
-      read_buffer.erase(0, pos + 2);
-    }
-  } catch (const std::bad_alloc &) {
-    data.clear();
-    Disconnect(client_id);
-    return false;
-  }
-  return true;
+  AddEvent(events, TransportEvent::kConnected, next_client_id_);
+  ++next_client_id_;
 }
 
 void Transport::Disconnect(ClientId client_id) {
-  std::map<ClientId, Client>::iterator it = clients_.find(client_id);
+  std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
   if (it == clients_.end())
     return;
-  AddEvent(disconnected_events_, TransportEvent::kDisconnected, client_id);
-  close(it->second.fd);
+  disconnected_client_ids_.push_back(client_id);
+  delete it->second;
   clients_.erase(it);
 }

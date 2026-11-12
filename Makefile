@@ -7,7 +7,11 @@ CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic -MMD -MP
 INCLUDES = -Iinclude
 
+<<<<<<< HEAD
 SRCS = main.cpp Transport.cpp Connection.cpp
+=======
+SRCS = main.cpp Transport.cppIrcMessage.cpp
+>>>>>>> origin/main
 
 SRCDIR = src
 OBJDIR = objs

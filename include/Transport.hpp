@@ -1,5 +1,5 @@
-#ifndef FT_IRC_TRANSPORT_HPP
-#define FT_IRC_TRANSPORT_HPP
+#ifndef TRANSPORT_HPP
+#define TRANSPORT_HPP
 
 #include <map>
 #include <poll.h>

@@ -28,8 +28,6 @@ class Registration
         std::string server_password_;
         std::map<ClientId, ClientState> clients_ ;
 
-        static bool IsValidNickname(const std::string &nickname);
-
         void HandlePass(
             ClientState &client,
             const IrcMessage &message,
@@ -44,10 +42,6 @@ class Registration
         void HandleUser(
             ClientState &client,
             const IrcMessage &message,
-            std::vector<std::string> &replies);
-        
-        static void TryCompleteRegistration(
-            ClientState &candidate,
             std::vector<std::string> &replies);
 };
 

@@ -26,6 +26,7 @@ public:
   std::vector<TransportEvent> WaitForEvents();
   bool PopDisconnectedClientId(ClientId &client_id);
   void Disconnect(ClientId client_id);
+  void QueueClientLineToSend(ClientId client_id, const std::string &line);
 
 private:
   int listen_fd_;

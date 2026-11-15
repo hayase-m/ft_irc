@@ -11,10 +11,14 @@ public:
 
   int GetSocketFd() const;
   bool ReceiveLines(std::vector<std::string> &lines);
+  bool QueueLineToSend(const std::string &line);
+  bool HasDataToSend() const;
+  bool SendQueuedData();
 
 private:
   int fd_;
   std::string read_buffer_;
+  std::string write_buffer_;
 
   Connection(const Connection &other);
   Connection &operator=(const Connection &other);

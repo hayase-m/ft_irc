@@ -1,5 +1,6 @@
 #include "Transport.hpp"
 
+#include <csignal>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
     std::cerr << "Usage: " << argv[0] << " <port> <password>" << std::endl;
     return 1;
   }
+  std::signal(SIGPIPE, SIG_IGN);
   try {
     Transport transport(ParsePort(argv[1]));
     while (true) {

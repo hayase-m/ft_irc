@@ -34,3 +34,23 @@ bool Connection::ReceiveLines(std::vector<std::string> &lines) {
   }
   return true;
 }
+
+bool Connection::QueueLineToSend(const std::string &line) {
+  try {
+    write_buffer_.append(line + "\r\n");
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
+  return true;
+}
+
+bool Connection::HasDataToSend() const { return !write_buffer_.empty(); }
+
+bool Connection::SendQueuedData() {
+  const ssize_t sent =
+      send(fd_, write_buffer_.c_str(), write_buffer_.size(), 0);
+  if (sent == -1)
+    return false;
+  write_buffer_.erase(0, static_cast<std::string::size_type>(sent));
+  return true;
+}

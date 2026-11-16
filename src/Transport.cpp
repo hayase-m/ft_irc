@@ -101,7 +101,10 @@ void Transport::BuildPollFds() {
   poll_fds_.push_back(listener);
   for (std::map<ClientId, Connection *>::iterator it = clients_.begin();
        it != clients_.end(); ++it) {
-    pollfd client_poll_fd = {it->second->GetSocketFd(), POLLIN, 0};
+    short events = POLLIN;
+    if (it->second->HasDataToSend())
+      events |= POLLOUT;
+    pollfd client_poll_fd = {it->second->GetSocketFd(), events, 0};
     poll_fds_.push_back(client_poll_fd);
   }
 }
@@ -119,7 +122,12 @@ void Transport::HandleConnectionEvents(std::vector<TransportEvent> &events) {
       Disconnect(client_id);
       continue;
     }
-    if ((ready & POLLIN) && !ReceiveClientLines(connection, client_id, events))
+    if ((ready & POLLIN) &&
+        !ReceiveClientLines(connection, client_id, events)) {
+      Disconnect(client_id);
+      continue;
+    }
+    if ((ready & POLLOUT) && !connection.SendQueuedData())
       Disconnect(client_id);
   }
 }
@@ -170,4 +178,13 @@ void Transport::Disconnect(ClientId client_id) {
   disconnected_client_ids_.push_back(client_id);
   delete it->second;
   clients_.erase(it);
+}
+
+void Transport::QueueClientLineToSend(ClientId client_id,
+                                      const std::string &line) {
+  std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
+  if (it == clients_.end())
+    return;
+  if (!it->second->QueueLineToSend(line))
+    Disconnect(client_id);
 }

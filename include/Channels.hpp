@@ -11,7 +11,7 @@ struct IrcMessage;
 
 struct ChannelReply {
   ClientId client_id;
-  std::string message;
+  std::string message; // The send queue appends CRLF.
 };
 
 class Registration;

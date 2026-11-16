@@ -57,10 +57,10 @@ void TestFirstJoinMakesCreatorOperator() {
       SendJoin(channels, registration, client_id, "JOIN #room");
 
   assert(replies.size() == 3);
-  ExpectReply(replies[0], client_id, ":Taro!guest@ircserv JOIN #room\r\n");
-  ExpectReply(replies[1], client_id, ":ircserv 353 Taro = #room :@Taro\r\n");
+  ExpectReply(replies[0], client_id, ":Taro!guest@ircserv JOIN #room");
+  ExpectReply(replies[1], client_id, ":ircserv 353 Taro = #room :@Taro");
   ExpectReply(replies[2], client_id,
-              ":ircserv 366 Taro #room :End of NAMES list\r\n");
+              ":ircserv 366 Taro #room :End of NAMES list");
 }
 
 void TestMembersAndOperatorsAreScopedToEachChannel() {
@@ -76,19 +76,19 @@ void TestMembersAndOperatorsAreScopedToEachChannel() {
   const std::vector<ChannelReply> replies =
       SendJoin(channels, registration, 2, "JOIN #ROOM,#second");
   assert(replies.size() == 7);
-  ExpectReply(replies[0], 2, ":Hanako!guest@ircserv JOIN #room\r\n");
-  ExpectReply(replies[1], 1, ":Hanako!guest@ircserv JOIN #room\r\n");
-  ExpectReply(replies[2], 2, ":ircserv 353 Hanako = #room :@Taro Hanako\r\n");
-  ExpectReply(replies[3], 2, ":ircserv 366 Hanako #room :End of NAMES list\r\n");
-  ExpectReply(replies[4], 2, ":Hanako!guest@ircserv JOIN #second\r\n");
-  ExpectReply(replies[5], 2, ":ircserv 353 Hanako = #second :@Hanako\r\n");
-  ExpectReply(replies[6], 2, ":ircserv 366 Hanako #second :End of NAMES list\r\n");
+  ExpectReply(replies[0], 2, ":Hanako!guest@ircserv JOIN #room");
+  ExpectReply(replies[1], 1, ":Hanako!guest@ircserv JOIN #room");
+  ExpectReply(replies[2], 2, ":ircserv 353 Hanako = #room :@Taro Hanako");
+  ExpectReply(replies[3], 2, ":ircserv 366 Hanako #room :End of NAMES list");
+  ExpectReply(replies[4], 2, ":Hanako!guest@ircserv JOIN #second");
+  ExpectReply(replies[5], 2, ":ircserv 353 Hanako = #second :@Hanako");
+  ExpectReply(replies[6], 2, ":ircserv 366 Hanako #second :End of NAMES list");
   assert(SendJoin(channels, registration, 2, "JOIN #room").empty());
 
   const std::vector<ChannelReply> next =
       SendJoin(channels, registration, 3, "JOIN #room");
   assert(next.size() == 5);
-  ExpectReply(next[3], 3, ":ircserv 353 Jiro = #room :@Taro Hanako Jiro\r\n");
+  ExpectReply(next[3], 3, ":ircserv 353 Jiro = #room :@Taro Hanako Jiro");
 }
 
 void TestRejectedRequestsAndChannelLength() {
@@ -100,28 +100,28 @@ void TestRejectedRequestsAndChannelLength() {
   std::vector<ChannelReply> replies =
       SendJoin(channels, registration, 2, "JOIN #room");
   assert(replies.size() == 1);
-  ExpectReply(replies[0], 2, ":ircserv 451 * :You have not registered\r\n");
+  ExpectReply(replies[0], 2, ":ircserv 451 * :You have not registered");
 
   replies = SendJoin(channels, registration, 1, "JOIN");
   assert(replies.size() == 1);
-  ExpectReply(replies[0], 1, ":ircserv 461 Taro JOIN :Not enough parameters\r\n");
+  ExpectReply(replies[0], 1, ":ircserv 461 Taro JOIN :Not enough parameters");
 
   replies = SendJoin(channels, registration, 1, "JOIN :#two words");
   assert(replies.size() == 1);
-  ExpectReply(replies[0], 1, ":ircserv 476 Taro * :Bad Channel Mask\r\n");
+  ExpectReply(replies[0], 1, ":ircserv 476 Taro * :Bad Channel Mask");
 
   const std::string max_name = "#" + std::string(49, 'x');
   replies = SendJoin(channels, registration, 1, "JOIN " + max_name + "x");
   assert(replies.size() == 1);
-  ExpectReply(replies[0], 1, ":ircserv 476 Taro * :Bad Channel Mask\r\n");
+  ExpectReply(replies[0], 1, ":ircserv 476 Taro * :Bad Channel Mask");
 
   replies = SendJoin(channels, registration, 1, "JOIN " + max_name);
   assert(replies.size() == 3);
-  ExpectReply(replies[1], 1, ":ircserv 353 Taro = " + max_name + " :@Taro\r\n");
+  ExpectReply(replies[1], 1, ":ircserv 353 Taro = " + max_name + " :@Taro");
 
   replies = SendJoin(channels, registration, 1, "JOIN #room");
   assert(replies.size() == 3);
-  ExpectReply(replies[1], 1, ":ircserv 353 Taro = #room :@Taro\r\n");
+  ExpectReply(replies[1], 1, ":ircserv 353 Taro = #room :@Taro");
 }
 
 void TestLongNamesListIsSplit() {
@@ -133,14 +133,14 @@ void TestLongNamesListIsSplit() {
     nickname << "Member" << id;
     Register(registration, id, nickname.str());
     if (id < last_client)
-      SendJoin(channels, registration, id, "JOIN #room");
+      SendJoin(channels, registration, id, "JOIN #room123");
   }
 
   const std::vector<ChannelReply> replies =
-      SendJoin(channels, registration, last_client, "JOIN #room");
+      SendJoin(channels, registration, last_client, "JOIN #room123");
   assert(replies.size() == last_client + 3);
-  const std::string header = ":ircserv 353 Member64 = #room :";
-  const std::string notice = ":Member64!guest@ircserv JOIN #room\r\n";
+  const std::string header = ":ircserv 353 Member64 = #room123 :";
+  const std::string notice = ":Member64!guest@ircserv JOIN #room123";
   ExpectReply(replies.front(), last_client, notice);
   ClientId next_member = 1;
   std::string names;
@@ -151,10 +151,10 @@ void TestLongNamesListIsSplit() {
       continue;
     }
     const std::string &line = replies[i].message;
-    assert(line.size() <= 512);
+    assert(line.size() + 2 <= 512);
     assert(line.find(header) == 0);
-    assert(line.compare(line.size() - 2, 2, "\r\n") == 0);
-    names += line.substr(header.size(), line.size() - header.size() - 2) + " ";
+    assert(line.find_first_of("\r\n") == std::string::npos);
+    names += line.substr(header.size()) + " ";
   }
   assert(next_member == last_client);
   std::ostringstream expected;
@@ -163,7 +163,7 @@ void TestLongNamesListIsSplit() {
     expected << "Member" << id << " ";
   assert(names == expected.str());
   ExpectReply(replies.back(), last_client,
-              ":ircserv 366 Member64 #room :End of NAMES list\r\n");
+              ":ircserv 366 Member64 #room123 :End of NAMES list");
 }
 
 void TestAllocationFailureRollsBackMembershipAndReplies() {
@@ -184,8 +184,8 @@ void TestAllocationFailureRollsBackMembershipAndReplies() {
     allocations_before_failure = -1;
     if (succeeded) {
       assert(replies.size() == 7);
-      ExpectReply(replies[2], 2, ":ircserv 353 Hanako = #room :@Taro Hanako\r\n");
-      ExpectReply(replies[5], 2, ":ircserv 353 Hanako = #second :@Hanako\r\n");
+      ExpectReply(replies[2], 2, ":ircserv 353 Hanako = #room :@Taro Hanako");
+      ExpectReply(replies[5], 2, ":ircserv 353 Hanako = #second :@Hanako");
       return;
     }
     assert(replies.size() == 1);

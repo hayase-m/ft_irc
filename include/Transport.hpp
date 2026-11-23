@@ -1,14 +1,14 @@
 #ifndef TRANSPORT_HPP
 #define TRANSPORT_HPP
 
+#include "ClientId.hpp"
+
 #include <map>
 #include <poll.h>
 #include <string>
 #include <vector>
 
 class Connection;
-
-typedef unsigned int ClientId;
 
 struct TransportEvent {
   enum Type { kConnected, kLineReceived };

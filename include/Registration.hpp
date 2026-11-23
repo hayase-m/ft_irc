@@ -1,9 +1,9 @@
 #ifndef FT_IRC_REGISTRATION_HPP
 #define FT_IRC_REGISTRATION_HPP
 
+#include "ClientId.hpp"
 #include "ClientState.hpp"
 #include "IrcMessage.hpp"
-#include "Transport.hpp"
 
 #include <string>
 #include <map>

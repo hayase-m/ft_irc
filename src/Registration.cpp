@@ -1,7 +1,7 @@
 #include "Registration.hpp"
+#include "ClientId.hpp"
 #include "ClientState.hpp"
 #include "IrcMessage.hpp"
-#include "Transport.hpp"
 
 #include <cstddef>
 #include <new>

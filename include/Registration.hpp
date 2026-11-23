@@ -3,27 +3,22 @@
 
 #include "ClientId.hpp"
 #include "ClientState.hpp"
+#include "Clients.hpp"
 #include "IrcMessage.hpp"
 
-#include <map>
 #include <string>
 #include <vector>
 
 class Registration {
 public:
-  explicit Registration(const std::string &server_password);
-
-  bool AddClient(ClientId client_id);
-  void RemoveClient(ClientId client_id);
-
-  const ClientState *FindClient(ClientId client_id) const;
+  Registration(const std::string &server_password, Clients &clients);
 
   bool HandleMessage(ClientId client_id, const IrcMessage &message,
                      std::vector<std::string> &replies);
 
 private:
   std::string server_password_;
-  std::map<ClientId, ClientState> clients_;
+  Clients &clients_;
 
   void HandlePass(ClientState &client, const IrcMessage &message,
                   std::vector<std::string> &replies);
@@ -33,6 +28,9 @@ private:
 
   void HandleUser(ClientState &client, const IrcMessage &message,
                   std::vector<std::string> &replies);
+
+  Registration(const Registration &other);
+  Registration &operator=(const Registration &other);
 };
 
 #endif

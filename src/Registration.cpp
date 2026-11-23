@@ -1,28 +1,14 @@
 #include "Registration.hpp"
 #include "ClientId.hpp"
 #include "ClientState.hpp"
+#include "Clients.hpp"
 #include "IrcMessage.hpp"
 
 #include <cstddef>
 #include <new>
-#include <utility>
 #include <vector>
 
 namespace {
-
-std::string NicknameKey(const std::string &nickname) {
-  const std::string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ[]\\^";
-  const std::string lower = "abcdefghijklmnopqrstuvwxyz{}|~";
-  std::string key = nickname;
-
-  for (std::string::size_type i = 0; i < key.size(); ++i) {
-    const std::string::size_type index = upper.find(key[i]);
-
-    if (index != std::string::npos)
-      key[i] = lower[index];
-  }
-  return key;
-}
 
 bool IsValidNickname(const std::string &nickname) {
   const std::string::size_type kMaxNicknameLength = 9;
@@ -54,45 +40,23 @@ void TryCompleteRegistration(ClientState &candidate,
 
 } // namespace
 
-Registration::Registration(const std::string &server_password)
-    : server_password_(server_password) {}
-
-bool Registration::AddClient(ClientId client_id) {
-  try {
-    return clients_.insert(std::make_pair(client_id, ClientState())).second;
-  } catch (const std::bad_alloc &) {
-    return false;
-  }
-}
-
-void Registration::RemoveClient(ClientId client_id) {
-  clients_.erase(client_id);
-}
-
-const ClientState *Registration::FindClient(ClientId client_id) const {
-  std::map<ClientId, ClientState>::const_iterator client =
-      clients_.find(client_id);
-
-  if (client == clients_.end())
-    return NULL;
-
-  return &client->second;
-}
+Registration::Registration(const std::string &server_password, Clients &clients)
+    : server_password_(server_password), clients_(clients) {}
 
 bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
                                  std::vector<std::string> &replies) {
-  std::map<ClientId, ClientState>::iterator client = clients_.find(client_id);
+  ClientState *client = clients_.FindClient(client_id);
 
-  if (client == clients_.end() ||
+  if (client == NULL ||
       (message.command != "PASS" && message.command != "NICK" &&
        message.command != "USER") ||
-      (message.command == "NICK" && client->second.registered)) {
+      (message.command == "NICK" && client->registered)) {
     replies.clear();
     return true;
   }
 
   try {
-    ClientState candidate = client->second;
+    ClientState candidate = *client;
     std::vector<std::string> pending;
 
     if (message.command == "PASS")
@@ -105,7 +69,7 @@ bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
     if (pending.empty())
       TryCompleteRegistration(candidate, pending);
 
-    ClientState &current = client->second;
+    ClientState &current = *client;
     current.nickname.swap(candidate.nickname);
     current.username.swap(candidate.username);
     current.realname.swap(candidate.realname);
@@ -164,16 +128,13 @@ void Registration::HandleNick(ClientId client_id, ClientState &client,
     return;
   }
 
-  const std::string nickname_key = NicknameKey(nickname);
+  ClientId owner_id;
 
-  for (std::map<ClientId, ClientState>::const_iterator other = clients_.begin();
-       other != clients_.end(); ++other) {
-    if (other->first != client_id &&
-        NicknameKey(other->second.nickname) == nickname_key) {
-      replies.push_back(":ircserv 433 " + target + " " + nickname +
-                        " :Nickname is already in use");
-      return;
-    }
+  if (clients_.FindClientIdByNickname(nickname, owner_id) &&
+      owner_id != client_id) {
+    replies.push_back(":ircserv 433 " + target + " " + nickname +
+                      " :Nickname is already in use");
+    return;
   }
   client.nickname = nickname;
 }

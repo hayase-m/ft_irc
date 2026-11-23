@@ -5,6 +5,7 @@
 #include "ClientState.hpp"
 #include "Clients.hpp"
 #include "IrcMessage.hpp"
+#include "OutgoingMessage.hpp"
 
 #include <string>
 #include <vector>
@@ -14,20 +15,23 @@ public:
   Registration(const std::string &server_password, Clients &clients);
 
   bool HandleMessage(ClientId client_id, const IrcMessage &message,
-                     std::vector<std::string> &replies);
+                     std::vector<OutgoingMessage> &replies);
 
 private:
   std::string server_password_;
   Clients &clients_;
 
-  void HandlePass(ClientState &client, const IrcMessage &message,
-                  std::vector<std::string> &replies);
+  void HandlePass(ClientId client_id, ClientState &client,
+                  const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
 
   void HandleNick(ClientId client_id, ClientState &client,
-                  const IrcMessage &message, std::vector<std::string> &replies);
+                  const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
 
-  void HandleUser(ClientState &client, const IrcMessage &message,
-                  std::vector<std::string> &replies);
+  void HandleUser(ClientId client_id, ClientState &client,
+                  const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
 
   Registration(const Registration &other);
   Registration &operator=(const Registration &other);

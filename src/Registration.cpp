@@ -3,6 +3,7 @@
 #include "ClientState.hpp"
 #include "Clients.hpp"
 #include "IrcMessage.hpp"
+#include "OutgoingMessage.hpp"
 
 #include <cstddef>
 #include <new>
@@ -26,14 +27,15 @@ bool IsValidNickname(const std::string &nickname) {
          nickname.find_first_not_of(all_characters) == std::string::npos;
 }
 
-void TryCompleteRegistration(ClientState &candidate,
-                             std::vector<std::string> &replies) {
+void TryCompleteRegistration(ClientId client_id, ClientState &candidate,
+                             std::vector<OutgoingMessage> &replies) {
   if (candidate.registered || !candidate.authenticated ||
       candidate.nickname.empty() || candidate.username.empty())
     return;
 
-  replies.push_back(":ircserv 001 " + candidate.nickname +
-                    " :Welcome to the IRC network");
+  replies.push_back(OutgoingMessage(client_id, ":ircserv 001 " +
+                                                   candidate.nickname +
+                                                   " :Welcome to the IRC network"));
 
   candidate.registered = true;
 }
@@ -44,7 +46,7 @@ Registration::Registration(const std::string &server_password, Clients &clients)
     : server_password_(server_password), clients_(clients) {}
 
 bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
-                                 std::vector<std::string> &replies) {
+                                 std::vector<OutgoingMessage> &replies) {
   ClientState *client = clients_.FindClient(client_id);
 
   if (client == NULL ||
@@ -57,17 +59,17 @@ bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
 
   try {
     ClientState candidate = *client;
-    std::vector<std::string> pending;
+    std::vector<OutgoingMessage> pending;
 
     if (message.command == "PASS")
-      HandlePass(candidate, message, pending);
+      HandlePass(client_id, candidate, message, pending);
     else if (message.command == "NICK")
       HandleNick(client_id, candidate, message, pending);
     else
-      HandleUser(candidate, message, pending);
+      HandleUser(client_id, candidate, message, pending);
 
     if (pending.empty())
-      TryCompleteRegistration(candidate, pending);
+      TryCompleteRegistration(client_id, candidate, pending);
 
     ClientState &current = *client;
     current.nickname.swap(candidate.nickname);
@@ -82,21 +84,24 @@ bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
   return true;
 }
 
-void Registration::HandlePass(ClientState &client, const IrcMessage &message,
-                              std::vector<std::string> &replies) {
+void Registration::HandlePass(ClientId client_id, ClientState &client,
+                              const IrcMessage &message,
+                              std::vector<OutgoingMessage> &replies) {
   const std::string target = client.nickname.empty() ? "*" : client.nickname;
 
   if (client.registered) {
-    replies.push_back(":ircserv 462 " + target + " :You may not reregister");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 462 " + target + " :You may not reregister"));
     return;
   }
   if (message.params.empty()) {
-    replies.push_back(":ircserv 461 " + target +
-                      " PASS :Not enough parameters");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 461 " + target + " PASS :Not enough parameters"));
     return;
   }
   if (message.params[0] != server_password_) {
-    replies.push_back(":ircserv 464 " + target + " :Password incorrect");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 464 " + target + " :Password incorrect"));
     return;
   }
 
@@ -105,11 +110,12 @@ void Registration::HandlePass(ClientState &client, const IrcMessage &message,
 
 void Registration::HandleNick(ClientId client_id, ClientState &client,
                               const IrcMessage &message,
-                              std::vector<std::string> &replies) {
+                              std::vector<OutgoingMessage> &replies) {
   const std::string target = client.nickname.empty() ? "*" : client.nickname;
 
   if (message.params.empty() || message.params[0].empty()) {
-    replies.push_back(":ircserv 431 " + target + " :No nickname given");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 431 " + target + " :No nickname given"));
     return;
   }
 
@@ -122,8 +128,9 @@ void Registration::HandleNick(ClientId client_id, ClientState &client,
         nickname.find('\0') == std::string::npos;
     const std::string rejected_nickname = fits_parameter ? nickname : "*";
 
-    replies.push_back(":ircserv 432 " + target + " " + rejected_nickname +
-                      " :Erroneous nickname");
+    replies.push_back(OutgoingMessage(client_id, ":ircserv 432 " + target +
+                                                     " " + rejected_nickname +
+                                                     " :Erroneous nickname"));
 
     return;
   }
@@ -132,25 +139,29 @@ void Registration::HandleNick(ClientId client_id, ClientState &client,
 
   if (clients_.FindClientIdByNickname(nickname, owner_id) &&
       owner_id != client_id) {
-    replies.push_back(":ircserv 433 " + target + " " + nickname +
-                      " :Nickname is already in use");
+    replies.push_back(OutgoingMessage(client_id,
+                                      ":ircserv 433 " + target + " " +
+                                          nickname +
+                                          " :Nickname is already in use"));
     return;
   }
   client.nickname = nickname;
 }
 
-void Registration::HandleUser(ClientState &client, const IrcMessage &message,
-                              std::vector<std::string> &replies) {
+void Registration::HandleUser(ClientId client_id, ClientState &client,
+                              const IrcMessage &message,
+                              std::vector<OutgoingMessage> &replies) {
   const std::string target = client.nickname.empty() ? "*" : client.nickname;
 
   if (client.registered) {
-    replies.push_back(":ircserv 462 " + target + " :You may not reregister");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 462 " + target + " :You may not reregister"));
     return;
   }
 
   if (message.params.size() < 4 || message.params[0].empty()) {
-    replies.push_back(":ircserv 461 " + target +
-                      " USER :Not enough parameters");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 461 " + target + " USER :Not enough parameters"));
     return;
   }
 

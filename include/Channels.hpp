@@ -1,46 +1,46 @@
 #ifndef CHANNELS_HPP
 #define CHANNELS_HPP
 
-#include "Transport.hpp"
+#include "ClientId.hpp"
+#include "OutgoingMessage.hpp"
 
 #include <map>
 #include <string>
 #include <vector>
 
 struct IrcMessage;
-
-struct ChannelReply {
-  ClientId client_id;
-  std::string message; // The send queue appends CRLF.
-};
-
-class Registration;
+class Clients;
 
 class Channels {
-    public:
-        bool HandleJoin(const Registration &registration, ClientId client_id,
-                        const IrcMessage &message,
-                        std::vector<ChannelReply> &replies);
+public:
+  explicit Channels(const Clients &clients);
 
-    private:
-        enum Role { kMember, kOperator };
-        typedef std::map<ClientId, Role> Members;
+  bool HandleJoin(ClientId client_id, const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
 
-        struct Channel {
-            std::string name;
-            Members members;
-        };
+private:
+  enum Role { kMember, kOperator };
+  typedef std::map<ClientId, Role> Members;
 
-        typedef std::map<std::string, Channel> ChannelMap;
-        ChannelMap channels_;
+  struct Channel {
+    std::string name;
+    Members members;
+  };
 
-        void JoinChannel(const Registration &registration, ClientId client_id,
-                        const std::string &name, std::vector<ChannelReply> &replies,
-                        std::vector<ChannelMap::iterator> &joined);
+  typedef std::map<std::string, Channel> ChannelMap;
 
-        static void BuildJoinReplies(const Registration &registration,
-                                    ClientId client_id, const Channel &channel,
-                                    Role role, std::vector<ChannelReply> &replies);
+  const Clients &clients_;
+  ChannelMap channels_;
+
+  void JoinChannel(ClientId client_id, const std::string &name,
+                   std::vector<OutgoingMessage> &replies,
+                   std::vector<ChannelMap::iterator> &joined);
+
+  void BuildJoinReplies(ClientId client_id, const Channel &channel, Role role,
+                        std::vector<OutgoingMessage> &replies) const;
+
+  Channels(const Channels &other);
+  Channels &operator=(const Channels &other);
 };
 
 #endif

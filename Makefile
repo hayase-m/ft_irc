@@ -11,6 +11,7 @@ SRCS = main.cpp \
        Transport.cpp \
        IrcMessage.cpp \
        Registration.cpp \
+       Clients.cpp \
        Connection.cpp \
        Channels.cpp \
        IrcServer.cpp

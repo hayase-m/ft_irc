@@ -3,15 +3,13 @@
 
 #include <string>
 
-struct ClientState{
-        
-    ClientState(): 
-        authenticated(false), registered(false){}
-    bool authenticated;
-    std::string nickname;
-    std::string username;
-    std::string realname;
-    bool registered;
+struct ClientState {
+  ClientState() : authenticated(false), registered(false) {}
+  bool authenticated;
+  std::string nickname;
+  std::string username;
+  std::string realname;
+  bool registered;
 };
 
 #endif

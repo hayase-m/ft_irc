@@ -3,36 +3,38 @@
 
 #include "ClientId.hpp"
 #include "ClientState.hpp"
+#include "Clients.hpp"
 #include "IrcMessage.hpp"
+#include "OutgoingMessage.hpp"
 
-#include <map>
 #include <string>
 #include <vector>
 
 class Registration {
 public:
-  explicit Registration(const std::string &server_password);
-
-  bool AddClient(ClientId client_id);
-  void RemoveClient(ClientId client_id);
-
-  const ClientState *FindClient(ClientId client_id) const;
+  Registration(const std::string &server_password, Clients &clients);
 
   bool HandleMessage(ClientId client_id, const IrcMessage &message,
-                     std::vector<std::string> &replies);
+                     std::vector<OutgoingMessage> &replies);
 
 private:
   std::string server_password_;
-  std::map<ClientId, ClientState> clients_;
+  Clients &clients_;
 
-  void HandlePass(ClientState &client, const IrcMessage &message,
-                  std::vector<std::string> &replies);
+  void HandlePass(ClientId client_id, ClientState &client,
+                  const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
 
   void HandleNick(ClientId client_id, ClientState &client,
-                  const IrcMessage &message, std::vector<std::string> &replies);
+                  const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
 
-  void HandleUser(ClientState &client, const IrcMessage &message,
-                  std::vector<std::string> &replies);
+  void HandleUser(ClientId client_id, ClientState &client,
+                  const IrcMessage &message,
+                  std::vector<OutgoingMessage> &replies);
+
+  Registration(const Registration &other);
+  Registration &operator=(const Registration &other);
 };
 
 #endif

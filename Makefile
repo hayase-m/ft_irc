@@ -7,18 +7,25 @@ CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic -MMD -MP
 INCLUDES = -Iinclude
 
-SRCS = main.cpp Transport.cpp IrcMessage.cpp Registration.cpp Connection.cpp IrcServer.cpp
+SRCS = main.cpp \
+       Transport.cpp \
+       IrcMessage.cpp \
+       Registration.cpp \
+       Connection.cpp \
+       Channels.cpp \
+       IrcServer.cpp
 
 SRCDIR = src
 OBJDIR = objs
 # main.cpp -> objs/main.o
 OBJS = $(SRCS:%.cpp=$(OBJDIR)/%.o)
+JOIN_TEST = $(OBJDIR)/join_test
 RM = rm -rf
 
 all: $(NAME)
 
 # Include generated dependency files. '-' ignores missing files on first build.
--include $(OBJS:.o=.d)
+-include $(OBJS:.o=.d) $(JOIN_TEST).d
 
 $(NAME): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $(NAME)
@@ -28,6 +35,12 @@ $(NAME): $(OBJS)
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@mkdir -p $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+test-join: $(JOIN_TEST)
+	$(JOIN_TEST)
+
+$(JOIN_TEST): tests/JoinTest.cpp $(addprefix $(OBJDIR)/,Channels.o Registration.o IrcMessage.o)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(filter %.o,$^) -o $@
 
 clean:
 	$(RM) $(OBJDIR)
@@ -39,4 +52,4 @@ fclean: clean
 re: fclean
 	@$(MAKE) all
 
-.PHONY: all clean fclean re
+.PHONY: all clean fclean re test-join

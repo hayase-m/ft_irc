@@ -5,24 +5,17 @@
 #include <new>
 
 namespace {
-void AddOutgoingMessage(std::vector<OutgoingMessage> &outgoing_messages,
-                        ClientId client_id, const std::string &line) {
-  OutgoingMessage outgoing_message;
-  outgoing_message.client_id = client_id;
-  outgoing_message.line = line;
-  outgoing_messages.push_back(outgoing_message);
-}
-
 bool IsRegistrationCommand(const std::string &command) {
   return command == "PASS" || command == "NICK" || command == "USER";
 }
 } // namespace
 
-IrcServer::IrcServer(const std::string &password) : registration_(password) {}
+IrcServer::IrcServer(const std::string &password)
+    : clients_(), registration_(password, clients_) {}
 
 void IrcServer::HandleConnected(
     ClientId client_id, std::vector<ClientId> &client_ids_to_disconnect) {
-  if (!registration_.AddClient(client_id))
+  if (!clients_.AddClient(client_id))
     client_ids_to_disconnect.push_back(client_id);
 }
 
@@ -40,29 +33,23 @@ void IrcServer::HandleLine(ClientId client_id, const std::string &line,
 
 bool IrcServer::ProcessLine(ClientId client_id, const std::string &line,
                             std::vector<OutgoingMessage> &outgoing_messages) {
-  const ClientState *client = registration_.FindClient(client_id);
+  const ClientState *client = clients_.FindClient(client_id);
   IrcMessage message;
   if (client == NULL || !parseMessage(line, message))
     return true;
-  if (IsRegistrationCommand(message.command)) {
-    std::vector<std::string> replies;
-    if (!registration_.HandleMessage(client_id, message, replies))
-      return false;
-    for (std::vector<std::string>::size_type i = 0; i < replies.size(); ++i)
-      AddOutgoingMessage(outgoing_messages, client_id, replies[i]);
-    return true;
-  }
+  if (IsRegistrationCommand(message.command))
+    return registration_.HandleMessage(client_id, message, outgoing_messages);
   const std::string target = client->nickname.empty() ? "*" : client->nickname;
   if (!client->registered)
-    AddOutgoingMessage(outgoing_messages, client_id,
-                       ":ircserv 451 " + target + " :You have not registered");
+    outgoing_messages.push_back(OutgoingMessage(
+        client_id, ":ircserv 451 " + target + " :You have not registered"));
   else
-    AddOutgoingMessage(outgoing_messages, client_id,
-                       ":ircserv 421 " + target + " " + message.command +
-                           " :Unknown command");
+    outgoing_messages.push_back(
+        OutgoingMessage(client_id, ":ircserv 421 " + target + " " +
+                                       message.command + " :Unknown command"));
   return true;
 }
 
 void IrcServer::HandleDisconnected(ClientId client_id) {
-  registration_.RemoveClient(client_id);
+  clients_.RemoveClient(client_id);
 }

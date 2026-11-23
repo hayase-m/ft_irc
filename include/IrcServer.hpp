@@ -2,6 +2,7 @@
 #define IRCSERVER_HPP
 
 #include "ClientId.hpp"
+#include "Clients.hpp"
 #include "OutgoingMessage.hpp"
 #include "Registration.hpp"
 
@@ -20,6 +21,7 @@ public:
   void HandleDisconnected(ClientId client_id);
 
 private:
+  Clients clients_;
   Registration registration_;
 
   bool ProcessLine(ClientId client_id, const std::string &line,

@@ -1,6 +1,8 @@
 #include "Channels.hpp"
+#include "ClientState.hpp"
+#include "Clients.hpp"
 #include "IrcMessage.hpp"
-#include "Registration.hpp"
+#include "OutgoingMessage.hpp"
 
 #include <algorithm>
 #include <new>
@@ -31,18 +33,12 @@ std::string ChannelKey(const std::string &name) {
   return key;
 }
 
-void AddReply(std::vector<ChannelReply> &replies, ClientId client_id,
-              const std::string &message) {
-  const ChannelReply reply = {client_id, message};
-  replies.push_back(reply);
-}
-
-void AddName(std::vector<ChannelReply> &replies, ClientId client_id,
+void AddName(std::vector<OutgoingMessage> &replies, ClientId client_id,
              const std::string &header, std::string &line,
              const std::string &name) {
   const std::string::size_type separator = line.size() == header.size() ? 0 : 1;
   if (line.size() + separator + name.size() + kCrlfLength > kMaxLineLength) {
-    AddReply(replies, client_id, line);
+    replies.push_back(OutgoingMessage(client_id, line));
     line = header;
   }
   if (line.size() != header.size())
@@ -52,23 +48,25 @@ void AddName(std::vector<ChannelReply> &replies, ClientId client_id,
 
 } // namespace
 
-bool Channels::HandleJoin(const Registration &registration, ClientId client_id,
-                          const IrcMessage &message,
-                          std::vector<ChannelReply> &replies) {
-  std::vector<ChannelReply> pending;
+Channels::Channels(const Clients &clients) : clients_(clients) {}
+
+bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
+                          std::vector<OutgoingMessage> &replies) {
+  std::vector<OutgoingMessage> pending;
   std::vector<ChannelMap::iterator> joined;
 
   try {
-    const ClientState *client = registration.FindClient(client_id);
+    const ClientState *client = clients_.FindClient(client_id);
     if (message.command == "JOIN" && client != NULL) {
       const std::string target =
           client->nickname.empty() ? "*" : client->nickname;
       if (!client->registered) {
-        AddReply(pending, client_id,
-                 ":ircserv 451 " + target + " :You have not registered");
+        pending.push_back(OutgoingMessage(
+            client_id, ":ircserv 451 " + target + " :You have not registered"));
       } else if (message.params.empty() || message.params[0].empty()) {
-        AddReply(pending, client_id,
-                 ":ircserv 461 " + target + " JOIN :Not enough parameters");
+        pending.push_back(OutgoingMessage(
+            client_id,
+            ":ircserv 461 " + target + " JOIN :Not enough parameters"));
       } else {
         const std::string &names = message.params[0];
         // Record every change without allocating after membership is updated.
@@ -76,8 +74,8 @@ bool Channels::HandleJoin(const Registration &registration, ClientId client_id,
         std::string::size_type start = 0;
         while (true) {
           const std::string::size_type end = names.find(',', start);
-          JoinChannel(registration, client_id, names.substr(start, end - start),
-                      pending, joined);
+          JoinChannel(client_id, names.substr(start, end - start), pending,
+                      joined);
           if (end == std::string::npos)
             break;
           start = end + 1;
@@ -99,9 +97,8 @@ bool Channels::HandleJoin(const Registration &registration, ClientId client_id,
   return true;
 }
 
-void Channels::JoinChannel(const Registration &registration, ClientId client_id,
-                           const std::string &name,
-                           std::vector<ChannelReply> &replies,
+void Channels::JoinChannel(ClientId client_id, const std::string &name,
+                           std::vector<OutgoingMessage> &replies,
                            std::vector<ChannelMap::iterator> &joined) {
   if (!IsValidChannelName(name)) {
     const bool fits_parameter =
@@ -109,9 +106,9 @@ void Channels::JoinChannel(const Registration &registration, ClientId client_id,
         name.find_first_of(" \a\r\n") == std::string::npos &&
         name.find('\0') == std::string::npos;
     const std::string rejected_name = fits_parameter ? name : "*";
-    AddReply(replies, client_id,
-             ":ircserv 476 " + registration.FindClient(client_id)->nickname +
-                 " " + rejected_name + " :Bad Channel Mask");
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 476 " + clients_.FindClient(client_id)->nickname +
+                       " " + rejected_name + " :Bad Channel Mask"));
     return;
   }
 
@@ -120,23 +117,23 @@ void Channels::JoinChannel(const Registration &registration, ClientId client_id,
   if (channel == channels_.end()) {
     Channel created;
     created.name = name;
-    BuildJoinReplies(registration, client_id, created, kOperator, replies);
+    BuildJoinReplies(client_id, created, kOperator, replies);
     created.members.insert(std::make_pair(client_id, kOperator));
     channel = channels_.insert(std::make_pair(key, created)).first;
   } else {
     Members &members = channel->second.members;
     if (members.find(client_id) != members.end())
       return;
-    BuildJoinReplies(registration, client_id, channel->second, kMember, replies);
+    BuildJoinReplies(client_id, channel->second, kMember, replies);
     members.insert(std::make_pair(client_id, kMember));
   }
   joined.push_back(channel);
 }
 
-void Channels::BuildJoinReplies(const Registration &registration,
-                                ClientId client_id, const Channel &channel,
-                                Role role, std::vector<ChannelReply> &replies) {
-  const ClientState &client = *registration.FindClient(client_id);
+void Channels::BuildJoinReplies(ClientId client_id, const Channel &channel,
+                                Role role,
+                                std::vector<OutgoingMessage> &replies) const {
+  const ClientState &client = *clients_.FindClient(client_id);
   const std::string prefix = ":" + client.nickname + "!";
   const std::string suffix = "@ircserv JOIN " + channel.name;
   const bool valid_username =
@@ -147,24 +144,25 @@ void Channels::BuildJoinReplies(const Registration &registration,
   const std::string &username =
       valid_username ? client.username : client.nickname;
   const std::string join = prefix + username + suffix;
-  AddReply(replies, client_id, join);
+  replies.push_back(OutgoingMessage(client_id, join));
 
   const std::string header =
       ":ircserv 353 " + client.nickname + " = " + channel.name + " :";
   std::string line = header;
   for (Members::const_iterator it = channel.members.begin();
        it != channel.members.end(); ++it) {
-    const ClientState *member = registration.FindClient(it->first);
+    const ClientState *member = clients_.FindClient(it->first);
     if (member == NULL || !member->registered)
       continue;
-    AddReply(replies, it->first, join);
+    replies.push_back(OutgoingMessage(it->first, join));
     AddName(replies, client_id, header, line,
             it->second == kOperator ? "@" + member->nickname : member->nickname);
   }
   AddName(replies, client_id, header, line,
           role == kOperator ? "@" + client.nickname : client.nickname);
-  AddReply(replies, client_id, line);
-  AddReply(replies, client_id,
-           ":ircserv 366 " + client.nickname + " " + channel.name +
-               " :End of NAMES list");
+  replies.push_back(OutgoingMessage(client_id, line));
+  replies.push_back(OutgoingMessage(client_id, ":ircserv 366 " +
+                                                   client.nickname + " " +
+                                                   channel.name +
+                                                   " :End of NAMES list"));
 }

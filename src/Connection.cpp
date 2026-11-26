@@ -9,7 +9,7 @@ namespace {
 const std::string::size_type kCrlfLength = 2;
 } // namespace
 
-Connection::Connection(int fd) : fd_(fd) {}
+Connection::Connection(int fd) : fd_(fd), close_pending_(false) {}
 
 Connection::~Connection() { close(fd_); }
 
@@ -54,3 +54,7 @@ bool Connection::SendQueuedData() {
   write_buffer_.erase(0, static_cast<std::string::size_type>(sent));
   return true;
 }
+
+bool Connection::GetClosePending() const { return close_pending_; }
+
+void Connection::SetClosePending() { close_pending_ = true; }

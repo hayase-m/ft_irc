@@ -37,8 +37,9 @@ void HandleEvent(Transport &transport, IrcServer &server,
       server.HandleConnected(event.client_id, client_ids_to_disconnect);
       break;
     case TransportEvent::kLineReceived:
-      server.HandleLine(event.client_id, event.line, outgoing_messages,
-                        client_ids_to_disconnect);
+      if (transport.CanProcessLine(event.client_id))
+        server.HandleLine(event.client_id, event.line, outgoing_messages,
+                          client_ids_to_disconnect);
       break;
     }
     for (std::vector<OutgoingMessage>::size_type i = 0;

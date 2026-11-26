@@ -101,7 +101,9 @@ void Transport::BuildPollFds() {
   poll_fds_.push_back(listener);
   for (std::map<ClientId, Connection *>::iterator it = clients_.begin();
        it != clients_.end(); ++it) {
-    short events = POLLIN;
+    short events = 0;
+    if (!it->second->GetClosePending())
+      events |= POLLIN;
     if (it->second->HasDataToSend())
       events |= POLLOUT;
     pollfd client_poll_fd = {it->second->GetSocketFd(), events, 0};
@@ -127,7 +129,8 @@ void Transport::HandleConnectionEvents(std::vector<TransportEvent> &events) {
       Disconnect(client_id);
       continue;
     }
-    if ((ready & POLLOUT) && !connection.SendQueuedData())
+    if (((ready & POLLOUT) && !connection.SendQueuedData()) ||
+        (connection.GetClosePending() && !connection.HasDataToSend()))
       Disconnect(client_id);
   }
 }
@@ -180,11 +183,30 @@ void Transport::Disconnect(ClientId client_id) {
   clients_.erase(it);
 }
 
+void Transport::DisconnectAfterFlush(ClientId client_id) {
+  std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
+  if (it == clients_.end())
+    return;
+  if (it->second->HasDataToSend())
+    it->second->SetClosePending();
+  else
+    Disconnect(client_id);
+}
+
 void Transport::QueueClientLineToSend(ClientId client_id,
                                       const std::string &line) {
   std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
   if (it == clients_.end())
     return;
+  if (it->second->GetClosePending())
+    return;
   if (!it->second->QueueLineToSend(line))
     Disconnect(client_id);
+}
+
+bool Transport::CanProcessLine(ClientId client_id) {
+  std::map<ClientId, Connection *>::iterator it = clients_.find(client_id);
+  if (it == clients_.end())
+    return false;
+  return !it->second->GetClosePending();
 }

@@ -14,11 +14,14 @@ public:
   bool QueueLineToSend(const std::string &line);
   bool HasDataToSend() const;
   bool SendQueuedData();
+  bool GetClosePending() const;
+  void SetClosePending();
 
 private:
   int fd_;
   std::string read_buffer_;
   std::string write_buffer_;
+  bool close_pending_;
 
   Connection(const Connection &other);
   Connection &operator=(const Connection &other);

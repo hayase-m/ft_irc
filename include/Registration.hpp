@@ -35,7 +35,7 @@ private:
                   std::vector<OutgoingMessage> &replies);
 
   ConnectionAction TryCompleteRegistration(
-      ClientId client_id, ClientState &candidate,
+      ClientId client_id, ClientState &client,
       std::vector<OutgoingMessage> &replies);
 
   Registration(const Registration &other);

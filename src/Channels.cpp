@@ -52,7 +52,6 @@ Channels::Channels(const Clients &clients) : clients_(clients) {}
 
 bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
                           std::vector<OutgoingMessage> &replies) {
-  std::vector<OutgoingMessage> pending;
   std::vector<ChannelMap::iterator> joined;
 
   try {
@@ -61,20 +60,19 @@ bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
       const std::string target =
           client->nickname.empty() ? "*" : client->nickname;
       if (!client->registered) {
-        pending.push_back(OutgoingMessage(
+        replies.push_back(OutgoingMessage(
             client_id, ":ircserv 451 " + target + " :You have not registered"));
       } else if (message.params.empty() || message.params[0].empty()) {
-        pending.push_back(
+        replies.push_back(
             OutgoingMessage(client_id, ":ircserv 461 " + target +
                                            " JOIN :Not enough parameters"));
       } else {
         const std::string &names = message.params[0];
-        // Record every change without allocating after membership is updated.
         joined.reserve(std::count(names.begin(), names.end(), ',') + 1);
         std::string::size_type start = 0;
         while (true) {
           const std::string::size_type end = names.find(',', start);
-          JoinChannel(client_id, names.substr(start, end - start), pending,
+          JoinChannel(client_id, names.substr(start, end - start), replies,
                       joined);
           if (end == std::string::npos)
             break;
@@ -93,8 +91,6 @@ bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
     }
     return false;
   }
-
-  replies.swap(pending);
   return true;
 }
 

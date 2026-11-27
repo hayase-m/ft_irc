@@ -40,7 +40,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 test-join: $(JOIN_TEST)
 	$(JOIN_TEST)
 
-$(JOIN_TEST): tests/JoinTest.cpp $(addprefix $(OBJDIR)/,Channels.o Registration.o IrcMessage.o)
+$(JOIN_TEST): tests/JoinTest.cpp $(addprefix $(OBJDIR)/,IrcServer.o Channels.o Registration.o Clients.o IrcMessage.o)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(filter %.o,$^) -o $@
 
 clean:

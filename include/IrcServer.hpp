@@ -3,6 +3,7 @@
 
 #include "ClientId.hpp"
 #include "Clients.hpp"
+#include "ConnectionAction.hpp"
 #include "OutgoingMessage.hpp"
 #include "Registration.hpp"
 
@@ -13,19 +14,14 @@ class IrcServer {
 public:
   explicit IrcServer(const std::string &password);
 
-  void HandleConnected(ClientId client_id,
-                       std::vector<ClientId> &client_ids_to_disconnect);
-  void HandleLine(ClientId client_id, const std::string &line,
-                  std::vector<OutgoingMessage> &outgoing_messages,
-                  std::vector<ClientId> &client_ids_to_disconnect);
+  ConnectionAction HandleConnected(ClientId client_id);
+  ConnectionAction HandleLine(ClientId client_id, const std::string &line,
+                              std::vector<OutgoingMessage> &outgoing_messages);
   void HandleDisconnected(ClientId client_id);
 
 private:
   Clients clients_;
   Registration registration_;
-
-  bool ProcessLine(ClientId client_id, const std::string &line,
-                   std::vector<OutgoingMessage> &outgoing_messages);
 
   IrcServer(const IrcServer &other);
   IrcServer &operator=(const IrcServer &other);

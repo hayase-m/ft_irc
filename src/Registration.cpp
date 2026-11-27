@@ -26,35 +26,23 @@ bool IsValidNickname(const std::string &nickname) {
   return first_characters.find(nickname[0]) != std::string::npos &&
          nickname.find_first_not_of(all_characters) == std::string::npos;
 }
-
-void TryCompleteRegistration(ClientId client_id, ClientState &candidate,
-                             std::vector<OutgoingMessage> &replies) {
-  if (candidate.registered || !candidate.authenticated ||
-      candidate.nickname.empty() || candidate.username.empty())
-    return;
-
-  replies.push_back(OutgoingMessage(client_id, ":ircserv 001 " +
-                                                   candidate.nickname +
-                                                   " :Welcome to the IRC network"));
-
-  candidate.registered = true;
-}
-
 } // namespace
 
 Registration::Registration(const std::string &server_password, Clients &clients)
     : server_password_(server_password), clients_(clients) {}
 
-bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
-                                 std::vector<OutgoingMessage> &replies) {
+ConnectionAction Registration::HandleMessage(
+    ClientId client_id, const IrcMessage &message,
+    std::vector<OutgoingMessage> &replies) {
   ClientState *client = clients_.FindClient(client_id);
+  ConnectionAction action = kKeepOpen;
 
   if (client == NULL ||
       (message.command != "PASS" && message.command != "NICK" &&
        message.command != "USER") ||
       (message.command == "NICK" && client->registered)) {
     replies.clear();
-    return true;
+    return kKeepOpen;
   }
 
   try {
@@ -69,7 +57,7 @@ bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
       HandleUser(client_id, candidate, message, pending);
 
     if (pending.empty())
-      TryCompleteRegistration(client_id, candidate, pending);
+      action = TryCompleteRegistration(client_id, candidate, pending);
 
     ClientState &current = *client;
     current.nickname.swap(candidate.nickname);
@@ -77,11 +65,13 @@ bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
     current.realname.swap(candidate.realname);
     current.authenticated = candidate.authenticated;
     current.registered = candidate.registered;
+    current.has_connection_password = candidate.has_connection_password;
+    current.connection_password.swap(candidate.connection_password);
     replies.swap(pending);
   } catch (const std::bad_alloc &) {
-    return false;
+    return kCloseNow;
   }
-  return true;
+  return action;
 }
 
 void Registration::HandlePass(ClientId client_id, ClientState &client,
@@ -99,13 +89,8 @@ void Registration::HandlePass(ClientId client_id, ClientState &client,
         client_id, ":ircserv 461 " + target + " PASS :Not enough parameters"));
     return;
   }
-  if (message.params[0] != server_password_) {
-    replies.push_back(OutgoingMessage(
-        client_id, ":ircserv 464 " + target + " :Password incorrect"));
-    return;
-  }
-
-  client.authenticated = true;
+  client.has_connection_password = true;
+  client.connection_password = message.params[0];
 }
 
 void Registration::HandleNick(ClientId client_id, ClientState &client,
@@ -114,8 +99,8 @@ void Registration::HandleNick(ClientId client_id, ClientState &client,
   const std::string target = client.nickname.empty() ? "*" : client.nickname;
 
   if (message.params.empty() || message.params[0].empty()) {
-    replies.push_back(OutgoingMessage(
-        client_id, ":ircserv 431 " + target + " :No nickname given"));
+    replies.push_back(OutgoingMessage(client_id, ":ircserv 431 " + target +
+                                                     " :No nickname given"));
     return;
   }
 
@@ -139,10 +124,9 @@ void Registration::HandleNick(ClientId client_id, ClientState &client,
 
   if (clients_.FindClientIdByNickname(nickname, owner_id) &&
       owner_id != client_id) {
-    replies.push_back(OutgoingMessage(client_id,
-                                      ":ircserv 433 " + target + " " +
-                                          nickname +
-                                          " :Nickname is already in use"));
+    replies.push_back(
+        OutgoingMessage(client_id, ":ircserv 433 " + target + " " + nickname +
+                                       " :Nickname is already in use"));
     return;
   }
   client.nickname = nickname;
@@ -170,4 +154,33 @@ void Registration::HandleUser(ClientId client_id, ClientState &client,
 
   client.username = username;
   client.realname = realname;
+}
+
+ConnectionAction Registration::TryCompleteRegistration(
+    ClientId client_id, ClientState &candidate,
+    std::vector<OutgoingMessage> &replies) {
+  if (candidate.registered || candidate.nickname.empty() ||
+      candidate.username.empty())
+    return kKeepOpen;
+
+  const bool password_matches =
+      candidate.has_connection_password &&
+      candidate.connection_password == server_password_;
+  candidate.has_connection_password = false;
+  std::string().swap(candidate.connection_password);
+
+  if (!password_matches) {
+    replies.push_back(OutgoingMessage(
+        client_id,
+        ":ircserv 464 " + candidate.nickname + " :Password incorrect"));
+    replies.push_back(OutgoingMessage(client_id, "ERROR :Closing connection"));
+    return kCloseAfterFlush;
+  }
+  candidate.authenticated = true;
+
+  replies.push_back(
+      OutgoingMessage(client_id, ":ircserv 001 " + candidate.nickname +
+                                     " :Welcome to the IRC network"));
+  candidate.registered = true;
+  return kKeepOpen;
 }

@@ -1,3 +1,4 @@
+#include "ConnectionAction.hpp"
 #include "IrcServer.hpp"
 #include "OutgoingMessage.hpp"
 #include "Transport.hpp"
@@ -31,24 +32,27 @@ void HandleEvent(Transport &transport, IrcServer &server,
                  const TransportEvent &event) {
   try {
     std::vector<OutgoingMessage> outgoing_messages;
-    std::vector<ClientId> client_ids_to_disconnect;
+    ConnectionAction action = kKeepOpen;
     switch (event.type) {
     case TransportEvent::kConnected:
-      server.HandleConnected(event.client_id, client_ids_to_disconnect);
+      action = server.HandleConnected(event.client_id);
       break;
     case TransportEvent::kLineReceived:
       if (transport.CanProcessLine(event.client_id))
-        server.HandleLine(event.client_id, event.line, outgoing_messages,
-                          client_ids_to_disconnect);
+        action =
+            server.HandleLine(event.client_id, event.line, outgoing_messages);
       break;
+    }
+    if (action == kCloseNow) {
+      transport.Disconnect(event.client_id);
+      return;
     }
     for (std::vector<OutgoingMessage>::size_type i = 0;
          i < outgoing_messages.size(); ++i)
       transport.QueueClientLineToSend(outgoing_messages[i].client_id,
                                       outgoing_messages[i].line);
-    for (std::vector<ClientId>::size_type i = 0;
-         i < client_ids_to_disconnect.size(); ++i)
-      transport.Disconnect(client_ids_to_disconnect[i]);
+    if (action == kCloseAfterFlush)
+      transport.DisconnectAfterFlush(event.client_id);
   } catch (const std::bad_alloc &) {
     transport.Disconnect(event.client_id);
   }

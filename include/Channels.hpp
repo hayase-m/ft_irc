@@ -1,6 +1,7 @@
 #ifndef CHANNELS_HPP
 #define CHANNELS_HPP
 
+#include "Channel.hpp"
 #include "Transport.hpp"
 
 #include <map>
@@ -11,29 +12,10 @@ struct IrcMessage;
 
 struct ChannelReply {
   ClientId client_id;
-  std::string message; // The send queue appends CRLF.
+  std::string message;
 };
 
 class Registration;
-
-class Channel {
-public:
-  enum Role { kMember, kOperator };
-  typedef std::map<ClientId, Role> Members;
-
-  explicit Channel(const std::string &name);
-
-  const std::string &GetName() const;
-  const Members &GetMembers() const;
-  bool HasMember(ClientId client_id) const;
-  bool AddMember(ClientId client_id, Role role);
-  void RemoveMember(ClientId client_id);
-  bool IsEmpty() const;
-
-private:
-  std::string name_;
-  Members members_;
-};
 
 class Channels {
 public:

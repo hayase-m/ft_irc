@@ -64,9 +64,9 @@ bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
         pending.push_back(OutgoingMessage(
             client_id, ":ircserv 451 " + target + " :You have not registered"));
       } else if (message.params.empty() || message.params[0].empty()) {
-        pending.push_back(OutgoingMessage(
-            client_id,
-            ":ircserv 461 " + target + " JOIN :Not enough parameters"));
+        pending.push_back(
+            OutgoingMessage(client_id, ":ircserv 461 " + target +
+                                           " JOIN :Not enough parameters"));
       } else {
         const std::string &names = message.params[0];
         // Record every change without allocating after membership is updated.
@@ -83,7 +83,8 @@ bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
       }
     }
   } catch (const std::bad_alloc &) {
-    for (std::vector<ChannelMap::iterator>::reverse_iterator it = joined.rbegin();
+    for (std::vector<ChannelMap::iterator>::reverse_iterator it =
+             joined.rbegin();
          it != joined.rend(); ++it) {
       ChannelMap::iterator channel = *it;
       channel->second.members.erase(client_id);
@@ -156,13 +157,13 @@ void Channels::BuildJoinReplies(ClientId client_id, const Channel &channel,
       continue;
     replies.push_back(OutgoingMessage(it->first, join));
     AddName(replies, client_id, header, line,
-            it->second == kOperator ? "@" + member->nickname : member->nickname);
+            it->second == kOperator ? "@" + member->nickname
+                                    : member->nickname);
   }
   AddName(replies, client_id, header, line,
           role == kOperator ? "@" + client.nickname : client.nickname);
   replies.push_back(OutgoingMessage(client_id, line));
-  replies.push_back(OutgoingMessage(client_id, ":ircserv 366 " +
-                                                   client.nickname + " " +
-                                                   channel.name +
-                                                   " :End of NAMES list"));
+  replies.push_back(
+      OutgoingMessage(client_id, ":ircserv 366 " + client.nickname + " " +
+                                     channel.name + " :End of NAMES list"));
 }

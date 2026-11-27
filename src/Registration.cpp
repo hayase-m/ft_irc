@@ -31,9 +31,9 @@ bool IsValidNickname(const std::string &nickname) {
 Registration::Registration(const std::string &server_password, Clients &clients)
     : server_password_(server_password), clients_(clients) {}
 
-ConnectionAction Registration::HandleMessage(
-    ClientId client_id, const IrcMessage &message,
-    std::vector<OutgoingMessage> &replies) {
+ConnectionAction
+Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
+                            std::vector<OutgoingMessage> &replies) {
   ClientState *client = clients_.FindClient(client_id);
   ConnectionAction action = kKeepOpen;
 
@@ -156,23 +156,19 @@ void Registration::HandleUser(ClientId client_id, ClientState &client,
   client.realname = realname;
 }
 
-ConnectionAction Registration::TryCompleteRegistration(
-    ClientId client_id, ClientState &candidate,
-    std::vector<OutgoingMessage> &replies) {
+ConnectionAction
+Registration::TryCompleteRegistration(ClientId client_id,
+                                      ClientState &candidate,
+                                      std::vector<OutgoingMessage> &replies) {
   if (candidate.registered || candidate.nickname.empty() ||
       candidate.username.empty())
     return kKeepOpen;
 
-  const bool password_matches =
-      candidate.has_connection_password &&
-      candidate.connection_password == server_password_;
-  candidate.has_connection_password = false;
-  std::string().swap(candidate.connection_password);
-
-  if (!password_matches) {
-    replies.push_back(OutgoingMessage(
-        client_id,
-        ":ircserv 464 " + candidate.nickname + " :Password incorrect"));
+  if (!candidate.has_connection_password ||
+      candidate.connection_password != server_password_) {
+    replies.push_back(OutgoingMessage(client_id, ":ircserv 464 " +
+                                                     candidate.nickname +
+                                                     " :Password incorrect"));
     replies.push_back(OutgoingMessage(client_id, "ERROR :Closing connection"));
     return kCloseAfterFlush;
   }

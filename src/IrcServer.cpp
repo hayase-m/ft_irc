@@ -15,9 +15,9 @@ ConnectionAction IrcServer::HandleConnected(ClientId client_id) {
   return clients_.AddClient(client_id) ? kKeepOpen : kCloseNow;
 }
 
-ConnectionAction IrcServer::HandleLine(
-    ClientId client_id, const std::string &line,
-    std::vector<OutgoingMessage> &outgoing_messages) {
+ConnectionAction
+IrcServer::HandleLine(ClientId client_id, const std::string &line,
+                      std::vector<OutgoingMessage> &outgoing_messages) {
   const ClientState *client = clients_.FindClient(client_id);
   IrcMessage message;
   if (client == NULL || !parseMessage(line, message))

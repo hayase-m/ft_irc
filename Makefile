@@ -7,7 +7,7 @@ CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic -MMD -MP
 INCLUDES = -Iinclude
 
-SRCS = main.cpp Transport.cpp IrcMessage.cpp Registration.cpp Connection.cpp Channels.cpp
+SRCS = main.cpp Transport.cpp IrcMessage.cpp Registration.cpp Connection.cpp Channel.cpp Channels.cpp
 
 SRCDIR = src
 OBJDIR = objs
@@ -33,7 +33,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 test-join: $(JOIN_TEST)
 	$(JOIN_TEST)
 
-$(JOIN_TEST): tests/JoinTest.cpp $(addprefix $(OBJDIR)/,Channels.o Registration.o IrcMessage.o)
+$(JOIN_TEST): tests/JoinTest.cpp $(addprefix $(OBJDIR)/,Channel.o Channels.o Registration.o IrcMessage.o)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(filter %.o,$^) -o $@
 
 clean:

@@ -1,6 +1,7 @@
 #ifndef CHANNELS_HPP
 #define CHANNELS_HPP
 
+#include "Channel.hpp"
 #include "Transport.hpp"
 
 #include <map>
@@ -11,36 +12,29 @@ struct IrcMessage;
 
 struct ChannelReply {
   ClientId client_id;
-  std::string message; // The send queue appends CRLF.
+  std::string message;
 };
 
 class Registration;
 
 class Channels {
-    public:
-        bool HandleJoin(const Registration &registration, ClientId client_id,
-                        const IrcMessage &message,
-                        std::vector<ChannelReply> &replies);
+public:
+  bool HandleJoin(const Registration &registration, ClientId client_id,
+                  const IrcMessage &message,
+                  std::vector<ChannelReply> &replies);
 
-    private:
-        enum Role { kMember, kOperator };
-        typedef std::map<ClientId, Role> Members;
+private:
+  typedef std::map<std::string, Channel> ChannelMap;
+  ChannelMap channels_;
 
-        struct Channel {
-            std::string name;
-            Members members;
-        };
+  void JoinChannel(const Registration &registration, ClientId client_id,
+                   const std::string &name, std::vector<ChannelReply> &replies,
+                   std::vector<ChannelMap::iterator> &joined);
 
-        typedef std::map<std::string, Channel> ChannelMap;
-        ChannelMap channels_;
-
-        void JoinChannel(const Registration &registration, ClientId client_id,
-                        const std::string &name, std::vector<ChannelReply> &replies,
-                        std::vector<ChannelMap::iterator> &joined);
-
-        static void BuildJoinReplies(const Registration &registration,
-                                    ClientId client_id, const Channel &channel,
-                                    Role role, std::vector<ChannelReply> &replies);
+  static void BuildJoinReplies(const Registration &registration,
+                               ClientId client_id, const Channel &channel,
+                               Channel::Role role,
+                               std::vector<ChannelReply> &replies);
 };
 
 #endif

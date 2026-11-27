@@ -85,11 +85,12 @@ bool Channels::HandleJoin(const Registration &registration, ClientId client_id,
       }
     }
   } catch (const std::bad_alloc &) {
-    for (std::vector<ChannelMap::iterator>::reverse_iterator it = joined.rbegin();
+    for (std::vector<ChannelMap::iterator>::reverse_iterator it =
+             joined.rbegin();
          it != joined.rend(); ++it) {
       ChannelMap::iterator channel = *it;
-      channel->second.members.erase(client_id);
-      if (channel->second.members.empty())
+      channel->second.RemoveMember(client_id);
+      if (channel->second.IsEmpty())
         channels_.erase(channel);
     }
     return false;
@@ -118,27 +119,28 @@ void Channels::JoinChannel(const Registration &registration, ClientId client_id,
   const std::string key = ChannelKey(name);
   ChannelMap::iterator channel = channels_.find(key);
   if (channel == channels_.end()) {
-    Channel created;
-    created.name = name;
-    BuildJoinReplies(registration, client_id, created, kOperator, replies);
-    created.members.insert(std::make_pair(client_id, kOperator));
+    Channel created(name);
+    BuildJoinReplies(registration, client_id, created, Channel::kOperator,
+                     replies);
+    created.AddMember(client_id, Channel::kOperator);
     channel = channels_.insert(std::make_pair(key, created)).first;
   } else {
-    Members &members = channel->second.members;
-    if (members.find(client_id) != members.end())
+    if (channel->second.HasMember(client_id))
       return;
-    BuildJoinReplies(registration, client_id, channel->second, kMember, replies);
-    members.insert(std::make_pair(client_id, kMember));
+    BuildJoinReplies(registration, client_id, channel->second, Channel::kMember,
+                     replies);
+    channel->second.AddMember(client_id, Channel::kMember);
   }
   joined.push_back(channel);
 }
 
 void Channels::BuildJoinReplies(const Registration &registration,
                                 ClientId client_id, const Channel &channel,
-                                Role role, std::vector<ChannelReply> &replies) {
+                                Channel::Role role,
+                                std::vector<ChannelReply> &replies) {
   const ClientState &client = *registration.FindClient(client_id);
   const std::string prefix = ":" + client.nickname + "!";
-  const std::string suffix = "@ircserv JOIN " + channel.name;
+  const std::string suffix = "@ircserv JOIN " + channel.GetName();
   const bool valid_username =
       client.username.size() <=
           kMaxLineLength - kCrlfLength - prefix.size() - suffix.size() &&
@@ -150,21 +152,23 @@ void Channels::BuildJoinReplies(const Registration &registration,
   AddReply(replies, client_id, join);
 
   const std::string header =
-      ":ircserv 353 " + client.nickname + " = " + channel.name + " :";
+      ":ircserv 353 " + client.nickname + " = " + channel.GetName() + " :";
   std::string line = header;
-  for (Members::const_iterator it = channel.members.begin();
-       it != channel.members.end(); ++it) {
+  const Channel::Members &members = channel.GetMembers();
+  for (Channel::Members::const_iterator it = members.begin();
+       it != members.end(); ++it) {
     const ClientState *member = registration.FindClient(it->first);
     if (member == NULL || !member->registered)
       continue;
     AddReply(replies, it->first, join);
     AddName(replies, client_id, header, line,
-            it->second == kOperator ? "@" + member->nickname : member->nickname);
+            it->second == Channel::kOperator ? "@" + member->nickname
+                                             : member->nickname);
   }
   AddName(replies, client_id, header, line,
-          role == kOperator ? "@" + client.nickname : client.nickname);
+          role == Channel::kOperator ? "@" + client.nickname : client.nickname);
   AddReply(replies, client_id, line);
   AddReply(replies, client_id,
-           ":ircserv 366 " + client.nickname + " " + channel.name +
+           ":ircserv 366 " + client.nickname + " " + channel.GetName() +
                " :End of NAMES list");
 }

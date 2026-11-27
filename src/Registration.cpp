@@ -46,28 +46,15 @@ Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
   }
 
   try {
-    ClientState candidate = *client;
-    std::vector<OutgoingMessage> pending;
-
     if (message.command == "PASS")
-      HandlePass(client_id, candidate, message, pending);
+      HandlePass(client_id, *client, message, replies);
     else if (message.command == "NICK")
-      HandleNick(client_id, candidate, message, pending);
+      HandleNick(client_id, *client, message, replies);
     else
-      HandleUser(client_id, candidate, message, pending);
+      HandleUser(client_id, *client, message, replies);
 
-    if (pending.empty())
-      action = TryCompleteRegistration(client_id, candidate, pending);
-
-    ClientState &current = *client;
-    current.nickname.swap(candidate.nickname);
-    current.username.swap(candidate.username);
-    current.realname.swap(candidate.realname);
-    current.authenticated = candidate.authenticated;
-    current.registered = candidate.registered;
-    current.has_connection_password = candidate.has_connection_password;
-    current.connection_password.swap(candidate.connection_password);
-    replies.swap(pending);
+    if (replies.empty())
+      action = TryCompleteRegistration(client_id, *client, replies);
   } catch (const std::bad_alloc &) {
     return kCloseNow;
   }
@@ -157,26 +144,23 @@ void Registration::HandleUser(ClientId client_id, ClientState &client,
 }
 
 ConnectionAction
-Registration::TryCompleteRegistration(ClientId client_id,
-                                      ClientState &candidate,
+Registration::TryCompleteRegistration(ClientId client_id, ClientState &client,
                                       std::vector<OutgoingMessage> &replies) {
-  if (candidate.registered || candidate.nickname.empty() ||
-      candidate.username.empty())
+  if (client.registered || client.nickname.empty() || client.username.empty())
     return kKeepOpen;
 
-  if (!candidate.has_connection_password ||
-      candidate.connection_password != server_password_) {
-    replies.push_back(OutgoingMessage(client_id, ":ircserv 464 " +
-                                                     candidate.nickname +
-                                                     " :Password incorrect"));
+  if (!client.has_connection_password ||
+      client.connection_password != server_password_) {
+    replies.push_back(OutgoingMessage(
+        client_id, ":ircserv 464 " + client.nickname + " :Password incorrect"));
     replies.push_back(OutgoingMessage(client_id, "ERROR :Closing connection"));
     return kCloseAfterFlush;
   }
-  candidate.authenticated = true;
+  client.authenticated = true;
 
   replies.push_back(
-      OutgoingMessage(client_id, ":ircserv 001 " + candidate.nickname +
+      OutgoingMessage(client_id, ":ircserv 001 " + client.nickname +
                                      " :Welcome to the IRC network"));
-  candidate.registered = true;
+  client.registered = true;
   return kKeepOpen;
 }

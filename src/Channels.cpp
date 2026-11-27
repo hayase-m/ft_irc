@@ -103,7 +103,8 @@ bool Channels::HandleJoin(const Registration &registration, ClientId client_id,
       }
     }
   } catch (const std::bad_alloc &) {
-    for (std::vector<ChannelMap::iterator>::reverse_iterator it = joined.rbegin();
+    for (std::vector<ChannelMap::iterator>::reverse_iterator it =
+             joined.rbegin();
          it != joined.rend(); ++it) {
       ChannelMap::iterator channel = *it;
       channel->second.RemoveMember(client_id);
@@ -137,13 +138,15 @@ void Channels::JoinChannel(const Registration &registration, ClientId client_id,
   ChannelMap::iterator channel = channels_.find(key);
   if (channel == channels_.end()) {
     Channel created(name);
-    BuildJoinReplies(registration, client_id, created, Channel::kOperator, replies);
+    BuildJoinReplies(registration, client_id, created, Channel::kOperator,
+                     replies);
     created.AddMember(client_id, Channel::kOperator);
     channel = channels_.insert(std::make_pair(key, created)).first;
   } else {
     if (channel->second.HasMember(client_id))
       return;
-    BuildJoinReplies(registration, client_id, channel->second, Channel::kMember, replies);
+    BuildJoinReplies(registration, client_id, channel->second, Channel::kMember,
+                     replies);
     channel->second.AddMember(client_id, Channel::kMember);
   }
   joined.push_back(channel);
@@ -151,7 +154,8 @@ void Channels::JoinChannel(const Registration &registration, ClientId client_id,
 
 void Channels::BuildJoinReplies(const Registration &registration,
                                 ClientId client_id, const Channel &channel,
-                                Channel::Role role, std::vector<ChannelReply> &replies) {
+                                Channel::Role role,
+                                std::vector<ChannelReply> &replies) {
   const ClientState &client = *registration.FindClient(client_id);
   const std::string prefix = ":" + client.nickname + "!";
   const std::string suffix = "@ircserv JOIN " + channel.GetName();
@@ -176,7 +180,8 @@ void Channels::BuildJoinReplies(const Registration &registration,
       continue;
     AddReply(replies, it->first, join);
     AddName(replies, client_id, header, line,
-            it->second == Channel::kOperator ? "@" + member->nickname : member->nickname);
+            it->second == Channel::kOperator ? "@" + member->nickname
+                                             : member->nickname);
   }
   AddName(replies, client_id, header, line,
           role == Channel::kOperator ? "@" + client.nickname : client.nickname);

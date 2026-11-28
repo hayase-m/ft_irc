@@ -1,4 +1,6 @@
 #include "Registration.hpp"
+#include "Clients.hpp"
+#include "OutgoingMessage.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -11,17 +13,18 @@ namespace {
 int allocations_before_failure = -1;
 
 void Send(Registration &registration, ClientId id, const std::string &line,
-          std::vector<std::string> &replies)
+          std::vector<OutgoingMessage> &replies)
 {
     IrcMessage message;
     assert(parseMessage(line, message));
     assert(registration.HandleMessage(id, message, replies));
 }
 
-void ExpectCode(const std::vector<std::string> &replies, const std::string &code)
+void ExpectCode(const std::vector<OutgoingMessage> &replies,
+                const std::string &code)
 {
     assert(replies.size() == 1);
-    assert(replies[0].compare(0, 13, ":ircserv " + code + " ") == 0);
+    assert(replies[0].line.compare(0, 13, ":ircserv " + code + " ") == 0);
 }
 
 void TestAllOrders()
@@ -33,41 +36,43 @@ void TestAllOrders()
 
     do
     {
-        Registration registration("secret");
-        std::vector<std::string> replies;
-        assert(registration.AddClient(1));
+        Clients clients;
+        Registration registration("secret", clients);
+        std::vector<OutgoingMessage> replies;
+        assert(clients.AddClient(1));
 
         for (int i = 0; i < 3; ++i)
         {
             Send(registration, 1, commands[order[i]], replies);
-            assert(registration.FindClient(1)->registered == (i == 2));
+            assert(clients.FindClient(1)->registered == (i == 2));
             if (i < 2)
                 assert(replies.empty());
         }
 
         ExpectCode(replies, "001");
-        assert(registration.FindClient(1)->realname == "Taro Yamada");
+        assert(clients.FindClient(1)->realname == "Taro Yamada");
         Send(registration, 1, "PASS secret", replies);
         ExpectCode(replies, "462");
         Send(registration, 1, "USER other 0 * :Other Name", replies);
         ExpectCode(replies, "462");
-        assert(registration.FindClient(1)->username == "taro");
+        assert(clients.FindClient(1)->username == "taro");
     } while (std::next_permutation(order, order + 3));
 }
 
 void TestErrorsAndRemoval()
 {
-    Registration registration("secret");
-    std::vector<std::string> replies;
+    Clients clients;
+    Registration registration("secret", clients);
+    std::vector<OutgoingMessage> replies;
 
-    assert(registration.AddClient(1));
-    assert(registration.AddClient(2));
+    assert(clients.AddClient(1));
+    assert(clients.AddClient(2));
 
     Send(registration, 1, "PASS", replies);
     ExpectCode(replies, "461");
     Send(registration, 1, "PASS wrong", replies);
     ExpectCode(replies, "464");
-    assert(!registration.FindClient(1)->authenticated);
+    assert(!clients.FindClient(1)->authenticated);
 
     Send(registration, 1, "USER taro", replies);
     ExpectCode(replies, "461");
@@ -79,38 +84,39 @@ void TestErrorsAndRemoval()
     ExpectCode(replies, "432");
     Send(registration, 1, "NICK Abcdefghi", replies);
     assert(replies.empty());
-    assert(!registration.AddClient(1));
-    assert(registration.FindClient(1)->nickname == "Abcdefghi");
+    assert(!clients.AddClient(1));
+    assert(clients.FindClient(1)->nickname == "Abcdefghi");
 
     Send(registration, 2, "NICK abcdefghi", replies);
     ExpectCode(replies, "433");
-    assert(registration.FindClient(2)->nickname.empty());
+    assert(clients.FindClient(2)->nickname.empty());
 
-    registration.RemoveClient(1);
-    assert(!registration.FindClient(1));
+    clients.RemoveClient(1);
+    assert(!clients.FindClient(1));
     Send(registration, 1, "PASS secret", replies);
-    assert(!registration.FindClient(1));
+    assert(!clients.FindClient(1));
     assert(replies.empty());
 
     Send(registration, 2, "NICK abcdefghi", replies);
-    assert(registration.FindClient(2)->nickname == "abcdefghi");
+    assert(clients.FindClient(2)->nickname == "abcdefghi");
     assert(replies.empty());
 }
 
 void TestAllocationFailures()
 {
-    Registration registration("secret");
+    Clients clients;
+    Registration registration("secret", clients);
     allocations_before_failure = 0;
-    const bool added = registration.AddClient(1);
+    const bool added = clients.AddClient(1);
     allocations_before_failure = -1;
     assert(!added);
-    assert(!registration.FindClient(1));
-    assert(registration.AddClient(1));
+    assert(!clients.FindClient(1));
+    assert(clients.AddClient(1));
 
-    std::vector<std::string> replies;
+    std::vector<OutgoingMessage> replies;
     Send(registration, 1, "PASS secret", replies);
     Send(registration, 1, "NICK Taro", replies);
-    replies.push_back("previous reply");
+    replies.push_back(OutgoingMessage(1, "previous reply"));
 
     IrcMessage user;
     assert(parseMessage(
@@ -123,7 +129,7 @@ void TestAllocationFailures()
         const bool handled = registration.HandleMessage(1, user, replies);
         allocations_before_failure = -1;
 
-        const ClientState *state = registration.FindClient(1);
+        const ClientState *state = clients.FindClient(1);
         if (handled)
         {
             assert(state->registered);
@@ -138,7 +144,7 @@ void TestAllocationFailures()
         assert(state->nickname == "Taro");
         assert(state->username.empty());
         assert(state->realname.empty());
-        assert(replies.size() == 1 && replies[0] == "previous reply");
+        assert(replies.size() == 1 && replies[0].line == "previous reply");
     }
 
     assert(false);

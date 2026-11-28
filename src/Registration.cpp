@@ -1,7 +1,7 @@
 #include "Registration.hpp"
+#include "ClientId.hpp"
 #include "ClientState.hpp"
 #include "IrcMessage.hpp"
-#include "Transport.hpp"
 
 #include <cstddef>
 #include <new>
@@ -41,7 +41,7 @@ bool IsValidNickname(const std::string &nickname) {
 }
 
 void TryCompleteRegistration(ClientState &candidate,
-                                           std::vector<std::string> &replies) {
+                             std::vector<std::string> &replies) {
   if (candidate.registered || !candidate.authenticated ||
       candidate.nickname.empty() || candidate.username.empty())
     return;
@@ -96,14 +96,14 @@ bool Registration::HandleMessage(ClientId client_id, const IrcMessage &message,
     std::vector<std::string> pending;
 
     if (message.command == "PASS")
-        HandlePass(candidate, message, pending);
+      HandlePass(candidate, message, pending);
     else if (message.command == "NICK")
-        HandleNick(client_id, candidate, message, pending);
+      HandleNick(client_id, candidate, message, pending);
     else
-        HandleUser(candidate, message, pending);
+      HandleUser(candidate, message, pending);
 
     if (pending.empty())
-        TryCompleteRegistration(candidate, pending);
+      TryCompleteRegistration(candidate, pending);
 
     ClientState &current = client->second;
     current.nickname.swap(candidate.nickname);
@@ -123,8 +123,7 @@ void Registration::HandlePass(ClientState &client, const IrcMessage &message,
   const std::string target = client.nickname.empty() ? "*" : client.nickname;
 
   if (client.registered) {
-    replies.push_back(":ircserv 462 " + target +
-                      " :You may not reregister");
+    replies.push_back(":ircserv 462 " + target + " :You may not reregister");
     return;
   }
   if (message.params.empty()) {
@@ -184,8 +183,7 @@ void Registration::HandleUser(ClientState &client, const IrcMessage &message,
   const std::string target = client.nickname.empty() ? "*" : client.nickname;
 
   if (client.registered) {
-    replies.push_back(":ircserv 462 " + target +
-                      " :You may not reregister");
+    replies.push_back(":ircserv 462 " + target + " :You may not reregister");
     return;
   }
 

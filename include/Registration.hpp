@@ -1,48 +1,38 @@
 #ifndef FT_IRC_REGISTRATION_HPP
 #define FT_IRC_REGISTRATION_HPP
 
+#include "ClientId.hpp"
 #include "ClientState.hpp"
 #include "IrcMessage.hpp"
-#include "Transport.hpp"
 
-#include <string>
 #include <map>
+#include <string>
 #include <vector>
 
-class Registration
-{
-    public:
-        explicit Registration(const std::string &server_password);
+class Registration {
+public:
+  explicit Registration(const std::string &server_password);
 
-        bool AddClient(ClientId client_id);
-        void RemoveClient(ClientId client_id);
+  bool AddClient(ClientId client_id);
+  void RemoveClient(ClientId client_id);
 
-        const ClientState *FindClient(ClientId client_id) const;
+  const ClientState *FindClient(ClientId client_id) const;
 
-        bool HandleMessage(
-            ClientId client_id,
-            const IrcMessage &message,
-            std::vector<std::string> &replies);
-        
-    private:
-        std::string server_password_;
-        std::map<ClientId, ClientState> clients_ ;
+  bool HandleMessage(ClientId client_id, const IrcMessage &message,
+                     std::vector<std::string> &replies);
 
-        void HandlePass(
-            ClientState &client,
-            const IrcMessage &message,
-            std::vector<std::string> &replies);
+private:
+  std::string server_password_;
+  std::map<ClientId, ClientState> clients_;
 
-        void HandleNick(
-            ClientId client_id,
-            ClientState &client,
-            const IrcMessage &message,
-            std::vector<std::string> &replies);
+  void HandlePass(ClientState &client, const IrcMessage &message,
+                  std::vector<std::string> &replies);
 
-        void HandleUser(
-            ClientState &client,
-            const IrcMessage &message,
-            std::vector<std::string> &replies);
+  void HandleNick(ClientId client_id, ClientState &client,
+                  const IrcMessage &message, std::vector<std::string> &replies);
+
+  void HandleUser(ClientState &client, const IrcMessage &message,
+                  std::vector<std::string> &replies);
 };
 
 #endif

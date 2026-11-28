@@ -5,6 +5,9 @@
 #include <new>
 
 namespace {
+const std::string::size_type kMaxLineLength = 512;
+const std::string::size_type kCrlfLength = 2;
+
 void AddOutgoingMessage(std::vector<OutgoingMessage> &outgoing_messages,
                         ClientId client_id, const std::string &line) {
   OutgoingMessage outgoing_message;
@@ -53,13 +56,18 @@ bool IrcServer::ProcessLine(ClientId client_id, const std::string &line,
     return true;
   }
   const std::string target = client->nickname.empty() ? "*" : client->nickname;
-  if (!client->registered)
+  if (!client->registered) {
     AddOutgoingMessage(outgoing_messages, client_id,
                        ":ircserv 451 " + target + " :You have not registered");
-  else
-    AddOutgoingMessage(outgoing_messages, client_id,
-                       ":ircserv 421 " + target + " " + message.command +
-                           " :Unknown command");
+    return true;
+  }
+  const std::string prefix = ":ircserv 421 " + target + " ";
+  const std::string suffix = " :Unknown command";
+  const std::string::size_type max_command_length =
+      kMaxLineLength - kCrlfLength - prefix.size() - suffix.size();
+  AddOutgoingMessage(outgoing_messages, client_id,
+                     prefix + message.command.substr(0, max_command_length) +
+                         suffix);
   return true;
 }
 

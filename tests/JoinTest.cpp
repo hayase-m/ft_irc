@@ -1,8 +1,4 @@
-#include "Channels.hpp"
-#include "Clients.hpp"
-#include "IrcMessage.hpp"
-#include "OutgoingMessage.hpp"
-#include "Registration.hpp"
+#include "IrcServer.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -17,28 +13,31 @@ namespace {
 
 int allocations_before_failure = -1;
 
-void Register(Clients &clients, Registration &registration, ClientId client_id,
+void SendLine(IrcServer &server, ClientId client_id, const std::string &line,
+              std::vector<OutgoingMessage> &replies) {
+  std::vector<ClientId> client_ids_to_disconnect;
+  server.HandleLine(client_id, line, replies, client_ids_to_disconnect);
+  assert(client_ids_to_disconnect.empty());
+}
+
+void Register(IrcServer &server, ClientId client_id,
               const std::string &nickname) {
-  assert(clients.AddClient(client_id));
+  std::vector<ClientId> client_ids_to_disconnect;
+  server.HandleConnected(client_id, client_ids_to_disconnect);
+  assert(client_ids_to_disconnect.empty());
 
   const std::string commands[] = {"PASS secret", "NICK " + nickname,
                                    "USER guest 0 * :Guest"};
-  IrcMessage message;
-  std::vector<OutgoingMessage> registration_replies;
   for (std::size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i) {
-    assert(parseMessage(commands[i], message));
-    assert(registration.HandleMessage(client_id, message, registration_replies));
+    std::vector<OutgoingMessage> replies;
+    SendLine(server, client_id, commands[i], replies);
   }
-  const ClientState *client = clients.FindClient(client_id);
-  assert(client != NULL && client->registered);
 }
 
-std::vector<OutgoingMessage> SendJoin(Channels &channels, ClientId client_id,
+std::vector<OutgoingMessage> SendJoin(IrcServer &server, ClientId client_id,
                                       const std::string &line) {
-  IrcMessage message;
   std::vector<OutgoingMessage> replies;
-  assert(parseMessage(line, message));
-  assert(channels.HandleJoin(client_id, message, replies));
+  SendLine(server, client_id, line, replies);
   return replies;
 }
 
@@ -50,13 +49,11 @@ void ExpectReply(const OutgoingMessage &reply, ClientId client_id,
 
 void TestFirstJoinMakesCreatorOperator() {
   const ClientId client_id = 1;
-  Clients clients;
-  Registration registration("secret", clients);
-  Register(clients, registration, client_id, "Taro");
+  IrcServer server("secret");
+  Register(server, client_id, "Taro");
 
-  Channels channels(clients);
   const std::vector<OutgoingMessage> replies =
-      SendJoin(channels, client_id, "JOIN #room");
+      SendJoin(server, client_id, "JOIN #room");
 
   assert(replies.size() == 3);
   ExpectReply(replies[0], client_id, ":Taro!guest@ircserv JOIN #room");
@@ -66,18 +63,16 @@ void TestFirstJoinMakesCreatorOperator() {
 }
 
 void TestMembersAndOperatorsAreScopedToEachChannel() {
-  Clients clients;
-  Registration registration("secret", clients);
-  Register(clients, registration, 1, "Taro");
-  Register(clients, registration, 2, "Hanako");
-  Register(clients, registration, 3, "Jiro");
+  IrcServer server("secret");
+  Register(server, 1, "Taro");
+  Register(server, 2, "Hanako");
+  Register(server, 3, "Jiro");
 
-  Channels channels(clients);
-  SendJoin(channels, 1, "JOIN #room");
-  SendJoin(channels, 3, "JOIN #other");
+  SendJoin(server, 1, "JOIN #room");
+  SendJoin(server, 3, "JOIN #other");
 
   const std::vector<OutgoingMessage> replies =
-      SendJoin(channels, 2, "JOIN #ROOM,#second");
+      SendJoin(server, 2, "JOIN #ROOM,#second");
   assert(replies.size() == 7);
   ExpectReply(replies[0], 2, ":Hanako!guest@ircserv JOIN #room");
   ExpectReply(replies[1], 1, ":Hanako!guest@ircserv JOIN #room");
@@ -86,61 +81,61 @@ void TestMembersAndOperatorsAreScopedToEachChannel() {
   ExpectReply(replies[4], 2, ":Hanako!guest@ircserv JOIN #second");
   ExpectReply(replies[5], 2, ":ircserv 353 Hanako = #second :@Hanako");
   ExpectReply(replies[6], 2, ":ircserv 366 Hanako #second :End of NAMES list");
-  assert(SendJoin(channels, 2, "JOIN #room").empty());
+  assert(SendJoin(server, 2, "JOIN #room").empty());
 
-  const std::vector<OutgoingMessage> next = SendJoin(channels, 3, "JOIN #room");
+  const std::vector<OutgoingMessage> next =
+      SendJoin(server, 3, "JOIN #room");
   assert(next.size() == 5);
   ExpectReply(next[3], 3, ":ircserv 353 Jiro = #room :@Taro Hanako Jiro");
 }
 
 void TestRejectedRequestsAndChannelLength() {
-  Clients clients;
-  Registration registration("secret", clients);
-  Register(clients, registration, 1, "Taro");
-  assert(clients.AddClient(2));
-  Channels channels(clients);
+  IrcServer server("secret");
+  Register(server, 1, "Taro");
+  std::vector<ClientId> client_ids_to_disconnect;
+  server.HandleConnected(2, client_ids_to_disconnect);
+  assert(client_ids_to_disconnect.empty());
 
-  std::vector<OutgoingMessage> replies = SendJoin(channels, 2, "JOIN #room");
+  std::vector<OutgoingMessage> replies =
+      SendJoin(server, 2, "JOIN #room");
   assert(replies.size() == 1);
   ExpectReply(replies[0], 2, ":ircserv 451 * :You have not registered");
 
-  replies = SendJoin(channels, 1, "JOIN");
+  replies = SendJoin(server, 1, "JOIN");
   assert(replies.size() == 1);
   ExpectReply(replies[0], 1, ":ircserv 461 Taro JOIN :Not enough parameters");
 
-  replies = SendJoin(channels, 1, "JOIN :#two words");
+  replies = SendJoin(server, 1, "JOIN :#two words");
   assert(replies.size() == 1);
   ExpectReply(replies[0], 1, ":ircserv 476 Taro * :Bad Channel Mask");
 
   const std::string max_name = "#" + std::string(49, 'x');
-  replies = SendJoin(channels, 1, "JOIN " + max_name + "x");
+  replies = SendJoin(server, 1, "JOIN " + max_name + "x");
   assert(replies.size() == 1);
   ExpectReply(replies[0], 1, ":ircserv 476 Taro * :Bad Channel Mask");
 
-  replies = SendJoin(channels, 1, "JOIN " + max_name);
+  replies = SendJoin(server, 1, "JOIN " + max_name);
   assert(replies.size() == 3);
   ExpectReply(replies[1], 1, ":ircserv 353 Taro = " + max_name + " :@Taro");
 
-  replies = SendJoin(channels, 1, "JOIN #room");
+  replies = SendJoin(server, 1, "JOIN #room");
   assert(replies.size() == 3);
   ExpectReply(replies[1], 1, ":ircserv 353 Taro = #room :@Taro");
 }
 
 void TestLongNamesListIsSplit() {
-  Clients clients;
-  Registration registration("secret", clients);
-  Channels channels(clients);
+  IrcServer server("secret");
   const ClientId last_client = 64;
   for (ClientId id = 1; id <= last_client; ++id) {
     std::ostringstream nickname;
     nickname << "Member" << id;
-    Register(clients, registration, id, nickname.str());
+    Register(server, id, nickname.str());
     if (id < last_client)
-      SendJoin(channels, id, "JOIN #room123");
+      SendJoin(server, id, "JOIN #room123");
   }
 
   const std::vector<OutgoingMessage> replies =
-      SendJoin(channels, last_client, "JOIN #room123");
+      SendJoin(server, last_client, "JOIN #room123");
   assert(replies.size() == last_client + 3);
   const std::string header = ":ircserv 353 Member64 = #room123 :";
   const std::string notice = ":Member64!guest@ircserv JOIN #room123";
@@ -170,30 +165,31 @@ void TestLongNamesListIsSplit() {
 }
 
 void TestAllocationFailureRollsBackMembershipAndReplies() {
-  Clients clients;
-  Registration registration("secret", clients);
-  Register(clients, registration, 1, "Taro");
-  Register(clients, registration, 2, "Hanako");
-  Channels channels(clients);
-  SendJoin(channels, 1, "JOIN #room");
+  IrcServer server("secret");
+  Register(server, 1, "Taro");
+  Register(server, 2, "Hanako");
+  SendJoin(server, 1, "JOIN #room");
 
-  IrcMessage message;
-  assert(parseMessage("JOIN #room,#second", message));
   const OutgoingMessage previous(1, "previous reply");
-  std::vector<OutgoingMessage> replies(1, previous);
+  const std::string join_line = "JOIN #room,#second";
 
   for (int allocation = 0; allocation < 256; ++allocation) {
+    std::vector<OutgoingMessage> replies(1, previous);
+    std::vector<ClientId> client_ids_to_disconnect;
+    client_ids_to_disconnect.reserve(1);
     allocations_before_failure = allocation;
-    const bool succeeded = channels.HandleJoin(2, message, replies);
+    server.HandleLine(2, join_line, replies,
+                      client_ids_to_disconnect);
     allocations_before_failure = -1;
-    if (succeeded) {
+    if (client_ids_to_disconnect.empty()) {
       assert(replies.size() == 7);
       ExpectReply(replies[2], 2, ":ircserv 353 Hanako = #room :@Taro Hanako");
       ExpectReply(replies[5], 2, ":ircserv 353 Hanako = #second :@Hanako");
       return;
     }
-    assert(replies.size() == 1);
-    ExpectReply(replies[0], 1, "previous reply");
+    assert(client_ids_to_disconnect.size() == 1);
+    assert(client_ids_to_disconnect[0] == 2);
+    assert(replies.empty());
   }
   assert(false);
 }

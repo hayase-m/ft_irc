@@ -60,10 +60,7 @@ bool Channels::HandleJoin(ClientId client_id, const IrcMessage &message,
     if (message.command == "JOIN" && client != NULL) {
       const std::string target =
           client->nickname.empty() ? "*" : client->nickname;
-      if (!client->registered) {
-        pending.push_back(OutgoingMessage(
-            client_id, ":ircserv 451 " + target + " :You have not registered"));
-      } else if (message.params.empty() || message.params[0].empty()) {
+      if (message.params.empty() || message.params[0].empty()) {
         pending.push_back(OutgoingMessage(
             client_id,
             ":ircserv 461 " + target + " JOIN :Not enough parameters"));
